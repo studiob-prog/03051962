@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · Demon Hunters K-Pop</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, collection, onSnapshot, getDoc, query, orderBy, where }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ══════════════════════════════════════════════════════════════
+//  ① MISMA CONFIG FIREBASE que en boletos.html
+// ══════════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey:            "AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU",
+  authDomain:        "tributo-kpop-demon-hunters.firebaseapp.com",
+  projectId:         "tributo-kpop-demon-hunters",
+  storageBucket:     "tributo-kpop-demon-hunters.firebasestorage.app",
+  messagingSenderId: "964475171923",
+  appId:             "1:964475171923:web:0ce2d4f3e720709f0002a6",
+  measurementId:     "G-S6M23FJLQK"
+};
+
+// ── Contraseña simple de acceso al panel ──────────────────────
+const ADMIN_PASSWORD = "demonhunters2025";  // ← cambia esto
+
+// ── Datos ──────────────────────────────────────────────────────
+const SHOWS = [
+  { id:"apr30-17", date:"Jue 30 Abr", time:"17:00", label:"Función 1" },
+  { id:"apr30-18", date:"Jue 30 Abr", time:"18:45", label:"Función 2" },
+  { id:"may02-17", date:"Sáb 2 May",  time:"17:00", label:"Función 3" },
+  { id:"may02-18", date:"Sáb 2 May",  time:"18:45", label:"Función 4" },
+];
+const ZONES = [
+  { id:"vip",  label:"VIP",        price:450, total:200, color:"#FFE600" },
+  { id:"pref", label:"Preferente", price:350, total:400, color:"#FF2D78" },
+  { id:"seg",  label:"2do Piso",   price:250, total:400, color:"#00F5FF" },
+];
+const ZONE_TOTAL = 1000;
+
+// ── Estado ────────────────────────────────────────────────────
+let authed = sessionStorage.getItem("kpop_admin") === "true";
+let inventory = null;
+let orders = [];
+let filter = { show:"all", zone:"all", status:"paid" };
+
+// ── Firebase ──────────────────────────────────────────────────
+let db;
+
+function initFirebase() {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+
+  // Escucha en tiempo real el inventario
+  onSnapshot(doc(db,"kpop_show","inventory"), snap => {
+    inventory = snap.exists() ? snap.data() : {};
+    renderDashboard();
+  });
+
+  // Escucha las órdenes
+  onSnapshot(collection(db,"kpop_show","orders"), snap => {
+    orders = snap.docs.map(d => d.data());
+    orders.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+    renderDashboard();
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════════════════════════
+function renderLogin() {
+  document.getElementById("app").innerHTML = `
+    <div class="login-wrap">
+      <div class="login-logo">🎵</div>
+      <div class="login-title">PANEL ADMIN</div>
+      <div class="login-sub">Demon Hunters K-Pop</div>
+      <input type="password" id="pw-input" placeholder="Contraseña" class="pw-input"
+        onkeydown="if(event.key==='Enter')window.checkPw()">
+      <button class="btn-login" onclick="window.checkPw()">ACCEDER</button>
+      <div id="pw-error" class="pw-error"></div>
+    </div>`;
+}
+
+window.checkPw = () => {
+  const pw = document.getElementById("pw-input").value;
+  if (pw === ADMIN_PASSWORD) {
+    sessionStorage.setItem("kpop_admin","true");
+    authed = true;
+    document.getElementById("app").innerHTML = `
+      <div style="text-align:center;padding:60px;color:var(--muted);font-family:monospace;font-size:11px;letter-spacing:3px">
+        CONECTANDO A FIREBASE...
+      </div>`;
+    initFirebase();
+  } else {
+    document.getElementById("pw-error").textContent = "Contraseña incorrecta";
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  CÁLCULOS
+// ══════════════════════════════════════════════════════════════
+function getSold(showId, zoneId) {
+  return inventory?.[showId]?.[zoneId] || 0;
+}
+
+function getShowRevenue(showId) {
+  return orders.filter(o=>o.show===showId && o.status==="paid")
+    .reduce((s,o)=>s+(o.total||0),0);
+}
+
+function getTotalRevenue() {
+  return orders.filter(o=>o.status==="paid").reduce((s,o)=>s+(o.total||0),0);
+}
+
+function getTotalSold() {
+  if (!inventory) return 0;
+  return Object.values(inventory).reduce((s,show)=>
+    s+Object.values(show).reduce((a,b)=>a+b,0),0);
+}
+
+function getFilteredOrders() {
+  return orders.filter(o=>{
+    if (filter.show !== "all" && o.show !== filter.show) return false;
+    if (filter.zone !== "all" && o.zone !== filter.zone) return false;
+    if (filter.status !== "all" && o.status !== filter.status) return false;
+    return true;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const totalRev  = getTotalRevenue();
+  const totalSold = getTotalSold();
+  const paidOrders = orders.filter(o=>o.status==="paid").length;
+  const pendingOrders = orders.filter(o=>o.status==="pending").length;
+  const filtered = getFilteredOrders();
+
+  let html = `
+  <!-- HEADER -->
+  <div class="dash-header">
+    <div>
+      <div class="dash-title">PANEL DE ADMINISTRACIÓN</div>
+      <div class="dash-sub">Demon Hunters K-Pop · Actualización en tiempo real</div>
+    </div>
+    <button class="btn-logout" onclick="window.logout()">SALIR</button>
+  </div>
+
+  <!-- KPIs GLOBALES -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Ingreso Total</div>
+      <div class="kpi-val cyan">$${totalRev.toLocaleString()}</div>
+      <div class="kpi-sub">MXN confirmados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Boletos Vendidos</div>
+      <div class="kpi-val pink">${totalSold}</div>
+      <div class="kpi-sub">de 4,000 totales</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Órdenes Pagadas</div>
+      <div class="kpi-val yellow">${paidOrders}</div>
+      <div class="kpi-sub">${pendingOrders} pendientes</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Ocupación Global</div>
+      <div class="kpi-val cyan">${Math.round(totalSold/40)}%</div>
+      <div class="kpi-sub">${4000-totalSold} disponibles</div>
+    </div>
+  </div>
+
+  <!-- TABLA POR FUNCIÓN -->
+  <div class="section-title">Disponibilidad por Función</div>
+  <div class="avail-grid">
+    ${SHOWS.map(show=>{
+      const showRev = getShowRevenue(show.id);
+      const showSold = ZONES.reduce((s,z)=>s+getSold(show.id,z.id),0);
+      return `
+      <div class="avail-card">
+        <div class="avail-header">
+          <div>
+            <div class="avail-func">${show.label}</div>
+            <div class="avail-date">${show.date} · ${show.time} hrs</div>
+          </div>
+          <div class="avail-rev">$${showRev.toLocaleString()}</div>
+        </div>
+        ${ZONES.map(z=>{
+          const sold = getSold(show.id, z.id);
+          const avail = z.total - sold;
+          const pct = Math.round((sold/z.total)*100);
+          return `
+          <div class="zone-row">
+            <div class="zone-badge" style="color:${z.color};border-color:${z.color}">${z.label}</div>
+            <div class="zone-bar-wrap">
+              <div class="zone-bar-fill" style="width:${pct}%;background:${z.color}"></div>
+            </div>
+            <div class="zone-nums">
+              <span style="color:${z.color}">${sold}</span>
+              <span class="zone-sep">/</span>
+              <span>${z.total}</span>
+              <span class="zone-avail-lbl">(${avail} libres)</span>
+            </div>
+          </div>`;
+        }).join("")}
+        <div class="avail-footer">
+          <span>${showSold} / ${ZONE_TOTAL} vendidos</span>
+          <span style="color:var(--pink)">${Math.round(showSold/10)}% ocupación</span>
+        </div>
+      </div>`;
+    }).join("")}
+  </div>
+
+  <!-- TABLA DE ÓRDENES -->
+  <div class="section-title" style="margin-top:36px">
+    Registro de Órdenes
+    <span class="orders-count">${filtered.length} registros</span>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filters-row">
+    <select class="filter-sel" onchange="window.setFilter('show',this.value)">
+      <option value="all">Todas las funciones</option>
+      ${SHOWS.map(s=>`<option value="${s.id}" ${filter.show===s.id?'selected':''}>${s.label} ${s.time}</option>`).join("")}
+    </select>
+    <select class="filter-sel" onchange="window.setFilter('zone',this.value)">
+      <option value="all">Todas las zonas</option>
+      ${ZONES.map(z=>`<option value="${z.id}" ${filter.zone===z.id?'selected':''}>${z.label}</option>`).join("")}
+    </select>
+    <select class="filter-sel" onchange="window.setFilter('status',this.value)">
+      <option value="all">Todos los estados</option>
+      <option value="paid" ${filter.status==='paid'?'selected':''}>Pagados</option>
+      <option value="pending" ${filter.status==='pending'?'selected':''}>Pendientes</option>
+    </select>
+  </div>
+
+  <div class="orders-table-wrap">
+    <table class="orders-table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Comprador</th><th>Función</th>
+          <th>Zona</th><th>Qty</th><th>Total</th><th>Dcto</th><th>Estado</th><th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filtered.length===0
+          ? `<tr><td colspan="9" class="empty-row">Sin resultados con estos filtros</td></tr>`
+          : filtered.map(o=>{
+              const show = SHOWS.find(s=>s.id===o.show);
+              const zone = ZONES.find(z=>z.id===o.zone);
+              const date = o.createdAt?.seconds
+                ? new Date(o.createdAt.seconds*1000).toLocaleDateString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})
+                : "—";
+              return `<tr>
+                <td class="mono small">${o.id||'—'}</td>
+                <td>
+                  <div class="buyer-name">${o.buyer?.name||'—'}</div>
+                  <div class="buyer-email">${o.buyer?.email||''}</div>
+                </td>
+                <td class="small">${show?.label||o.show}<br><span class="muted">${show?.time||''}</span></td>
+                <td><span class="zone-pill" style="color:${zone?.color||'#fff'};border-color:${zone?.color||'#fff'}">${zone?.label||o.zone}</span></td>
+                <td class="center">${o.qty}</td>
+                <td class="cyan mono">$${(o.total||0).toLocaleString()}</td>
+                <td class="small">${o.discount?`<span class="dcto-pill">${o.discount.code}<br>−${o.discount.pct}%</span>`:'—'}</td>
+                <td><span class="status-pill ${o.status==='paid'?'paid':'pending'}">${o.status==='paid'?'PAGADO':'PENDIENTE'}</span></td>
+                <td class="small muted">${date}</td>
+              </tr>`;
+            }).join("")}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- EXPORT -->
+  <button class="btn-export" onclick="window.exportCSV()">⬇ EXPORTAR CSV</button>
+  `;
+
+  document.getElementById("app").innerHTML = html;
+}
+
+window.setFilter = (key, val) => { filter[key]=val; renderDashboard(); };
+window.logout = () => { sessionStorage.removeItem("kpop_admin"); authed=false; location.reload(); };
+
+window.exportCSV = () => {
+  const rows = [["ID","Nombre","Email","Teléfono","Función","Zona","Qty","Precio unitario","Descuento","Total","Estado","Fecha"]];
+  const filtered = getFilteredOrders();
+  filtered.forEach(o=>{
+    const show = SHOWS.find(s=>s.id===o.show);
+    const zone = ZONES.find(z=>z.id===o.zone);
+    const date = o.createdAt?.seconds ? new Date(o.createdAt.seconds*1000).toLocaleDateString("es-MX") : "";
+    rows.push([
+      o.id, o.buyer?.name, o.buyer?.email, o.buyer?.phone,
+      `${show?.label} ${show?.time}`, zone?.label, o.qty,
+      zone?.price, o.discount?`${o.discount.code} -${o.discount.pct}%`:"",
+      o.total, o.status, date
+    ]);
+  });
+  const csv = rows.map(r=>r.map(c=>`"${c||''}"`).join(",")).join("\n");
+  const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href=url; a.download="demon_hunters_boletos.csv"; a.click();
+};
+
+// ARRANQUE
+if (authed) { initFirebase(); } else { renderLogin(); }
+</script>
+
+</head>
+<body>
+<div id="app" class="wrap"></div>
+
+<style>
+:root{--pink:#FF2D78;--cyan:#00F5FF;--yellow:#FFE600;--deep:#08001A;--card:#0E0022;--muted:#8B7AAA;--text:#F0E6FF;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--deep);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 20px 80px;}
+
+/* LOGIN */
+.login-wrap{max-width:360px;margin:80px auto;background:rgba(14,0,34,.9);border:1px solid rgba(255,45,120,.2);border-radius:14px;padding:40px 32px;text-align:center;}
+.login-logo{font-size:40px;margin-bottom:12px;}
+.login-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:#fff;margin-bottom:4px;}
+.login-sub{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--muted);margin-bottom:28px;}
+.pw-input{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,45,120,.25);border-radius:8px;padding:12px 16px;color:#fff;font-size:16px;outline:none;margin-bottom:12px;font-family:'Space Mono',monospace;letter-spacing:4px;}
+.pw-input:focus{border-color:var(--pink);}
+.btn-login{width:100%;padding:13px;background:linear-gradient(90deg,#FF2D78,#FF6B9D);border:none;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:4px;cursor:pointer;}
+.pw-error{color:var(--pink);font-size:12px;margin-top:8px;font-family:'Space Mono',monospace;}
+
+/* HEADER */
+.dash-header{display:flex;align-items:center;justify-content:space-between;padding:24px 0 20px;border-bottom:1px solid rgba(255,45,120,.15);margin-bottom:28px;flex-wrap:wrap;gap:12px;}
+.dash-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:#fff;}
+.dash-sub{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:4px;}
+.btn-logout{background:rgba(255,45,120,.1);border:1px solid rgba(255,45,120,.3);color:var(--pink);font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;padding:8px 16px;border-radius:6px;cursor:pointer;}
+
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:32px;}
+.kpi-card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:20px 18px;}
+.kpi-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;}
+.kpi-val{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:2px;line-height:1;}
+.kpi-val.cyan{color:var(--cyan);text-shadow:0 0 20px rgba(0,245,255,.3);}
+.kpi-val.pink{color:var(--pink);text-shadow:0 0 20px rgba(255,45,120,.3);}
+.kpi-val.yellow{color:var(--yellow);text-shadow:0 0 20px rgba(255,230,0,.3);}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* SECTION TITLE */
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:12px;}
+.orders-count{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);font-weight:400;letter-spacing:2px;}
+
+/* AVAILABILITY */
+.avail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;}
+.avail-card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:18px;}
+.avail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:8px;}
+.avail-func{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#fff;}
+.avail-date{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:2px;}
+.avail-rev{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--cyan);letter-spacing:1px;white-space:nowrap;}
+.zone-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.zone-badge{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;border:1px solid;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+.zone-bar-wrap{flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;}
+.zone-bar-fill{height:100%;border-radius:3px;transition:width .5s;}
+.zone-nums{font-family:'Space Mono',monospace;font-size:11px;color:#fff;white-space:nowrap;display:flex;gap:2px;align-items:center;}
+.zone-sep{color:var(--muted);}
+.zone-avail-lbl{color:var(--muted);font-size:10px;margin-left:4px;}
+.avail-footer{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);border-top:1px solid rgba(255,255,255,.06);padding-top:10px;margin-top:4px;}
+
+/* FILTERS */
+.filters-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.filter-sel{background:var(--card);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:var(--text);padding:8px 12px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;outline:none;cursor:pointer;}
+.filter-sel:focus{border-color:var(--pink);}
+
+/* ORDERS TABLE */
+.orders-table-wrap{overflow-x:auto;border-radius:10px;border:1px solid rgba(255,255,255,.06);}
+.orders-table{width:100%;border-collapse:collapse;min-width:700px;}
+.orders-table th{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:12px 14px;text-align:left;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.06);}
+.orders-table td{padding:12px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;}
+.orders-table tr:last-child td{border-bottom:none;}
+.orders-table tr:hover td{background:rgba(255,45,120,.04);}
+.mono{font-family:'Space Mono',monospace;}
+.small{font-size:12px;}
+.center{text-align:center;}
+.cyan{color:var(--cyan);}
+.muted{color:var(--muted);}
+.buyer-name{font-weight:700;color:#fff;}
+.buyer-email{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:2px;}
+.zone-pill{font-family:'Space Mono',monospace;font-size:10px;border:1px solid;padding:2px 8px;border-radius:20px;}
+.dcto-pill{font-family:'Space Mono',monospace;font-size:9px;color:var(--yellow);letter-spacing:1px;line-height:1.5;}
+.status-pill{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;padding:3px 10px;border-radius:20px;}
+.status-pill.paid{background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.3);}
+.status-pill.pending{background:rgba(255,230,0,.1);color:var(--yellow);border:1px solid rgba(255,230,0,.3);}
+.empty-row{text-align:center;color:var(--muted);font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;padding:32px !important;}
+
+/* EXPORT */
+.btn-export{display:block;margin:20px 0 0 auto;background:rgba(0,245,255,.08);border:1px solid rgba(0,245,255,.3);color:var(--cyan);font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .2s;}
+.btn-export:hover{background:rgba(0,245,255,.15);}
+</style>
+
+</body>
+</html>
