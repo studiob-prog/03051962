@@ -58,4 +58,185 @@
   .pc-desc { font-family: 'Cormorant Garamond', serif; font-size: 15px; font-style: italic; color: var(--cream); opacity: 0.6; margin-top: 14px; line-height: 1.5; }
   .pc-saving { display: inline-block; font-size: 9px; font-weight: 600; letter-spacing: 2px; color: var(--black); background: var(--gold); padding: 3px 10px; margin-top: 12px; }
   .pc-btn { display: block; text-align: center; font-size: 9px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--gold-light); border: 1px solid var(--gold); padding: 13px 20px; text-decoration: none; margin-top: 24px; }
-  .price-card.featured .pc-btn​​​​​​​​​​​​​​​​
+  .price-card.featured .pc-btn { background: var(--gold); color: var(--black); }
+  .discount-note { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 13px; color: #3a3a3a; text-align: center; margin-top: 18px; }
+  .location-card { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--gold); padding: 32px 36px; display: flex; align-items: flex-start; gap: 24px; max-width: 600px; }
+  .loc-icon { font-size: 28px; opacity: 0.6; flex-shrink: 0; }
+  .loc-label { font-size: 9px; font-weight: 600; letter-spacing: 4px; color: var(--gold); text-transform: uppercase; margin-bottom: 8px; }
+  .loc-address { font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--white); line-height: 1.2; }
+  .loc-neighborhood { font-size: 10px; color: var(--grey); letter-spacing: 3px; text-transform: uppercase; margin-top: 6px; }
+  .instructor-row { display: flex; align-items: center; gap: 20px; margin-bottom: 60px; }
+  .il { flex: 1; height: 1px; background: var(--border); }
+  .instructor-name-display { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 600; color: var(--cream); letter-spacing: 1px; text-align: center; }
+  .instructor-sub { font-size: 9px; font-weight: 300; letter-spacing: 4px; color: var(--grey); text-transform: uppercase; text-align: center; margin-top: 4px; }
+  .social-handles { display: flex; gap: 12px; flex-wrap: wrap; }
+  .social-handle { font-size: 10px; font-weight: 500; color: var(--gold-light); border: 1px solid #2a2a2a; padding: 10px 18px; text-decoration: none; }
+  .form-block { margin-top: 48px; max-width: 560px; }
+  .form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+  .form-label { font-size: 9px; font-weight: 600; letter-spacing: 3px; color: var(--gold); text-transform: uppercase; }
+  .form-input, .form-select { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--gold); color: var(--white); font-family: 'Montserrat', sans-serif; font-size: 13px; padding: 14px 16px; width: 100%; outline: none; -webkit-appearance: none; appearance: none; }
+  .form-input::placeholder { color: #444; }
+  .form-select option { background: var(--card); color: var(--white); }
+  .form-submit { display: block; width: 100%; font-size: 10px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--black); background: var(--gold); border: none; padding: 16px; cursor: pointer; margin-top: 8px; font-family: 'Montserrat', sans-serif; }
+  .form-note { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 13px; color: #444; margin-top: 12px; text-align: center; }
+  footer { background: var(--black); border-top: 1px solid var(--border); padding: clamp(24px,4vh,40px) clamp(24px,8vw,100px); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  .footer-logos { display: flex; align-items: center; gap: 20px; }
+  .footer-logo { font-size: 9px; font-weight: 600; letter-spacing: 3px; color: #333; text-transform: uppercase; }
+  .footer-dot { width: 3px; height: 3px; background: #2a2a2a; border-radius: 50%; }
+  .footer-copy { font-size: 9px; color: #2a2a2a; letter-spacing: 2px; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 600px) { .nav-links { display: none; } .cta-secondary { display: none; } }
+</style>
+</head>
+<body>
+<div class="top-bar"></div>
+<nav>
+  <div class="nav-brand">CREA<span>CION</span> ESCENICA</div>
+  <ul class="nav-links">
+    <li><a href="#info">Detalles</a></li>
+    <li><a href="#precios">Precios</a></li>
+    <li><a href="#lugar">Lugar</a></li>
+    <li><a href="#registro">Registro</a></li>
+  </ul>
+</nav>
+<section class="hero">
+  <div class="hero-tag">Ciudad de Mexico 2026</div>
+  <div class="hero-title">
+    <span class="hero-pre">Taller de</span>
+    <span class="hero-main">CREA<span>CION</span></span>
+    <span class="hero-sub">Escenica</span>
+  </div>
+  <div class="hero-desc">
+    <p>Un <strong>laboratorio creativo</strong> de herramientas para la creacion e interpretacion, con objetivo a una <strong>puesta en escena interdisciplinaria</strong> que integra musica, teatro y danza en un proceso de exploracion vivo.</p>
+  </div>
+  <div class="hero-tags">
+    <span class="tag solid">Musica</span>
+    <span class="tag solid">Teatro</span>
+    <span class="tag solid">Danza</span>
+    <span class="tag outline">Interpretacion</span>
+    <span class="tag outline">Creacion escenica</span>
+  </div>
+  <div class="hero-cta">
+    <a href="#registro" class="cta-btn">Inscribete ahora</a>
+    <a href="#info" class="cta-secondary">Ver detalles</a>
+  </div>
+</section>
+<div class="section-divider"><div class="sdl"></div><div class="sdd"></div><div class="sdr"></div></div>
+<section id="info">
+  <div class="section-label">Detalles del taller</div>
+  <div class="info-grid">
+    <div class="info-cell"><div class="ic-label">Inicio</div><div class="ic-value large">13 Abril</div><div class="ic-sub">2026</div></div>
+    <div class="info-cell"><div class="ic-label">Cierre</div><div class="ic-value large">6 Julio</div><div class="ic-sub">2026</div></div>
+    <div class="info-cell"><div class="ic-label">Sesiones</div><div class="ic-value">Todos los lunes</div><div class="ic-value gold">18:00 - 20:00 h</div></div>
+    <div class="info-cell"><div class="ic-label">Duracion</div><div class="ic-value">12 sesiones</div><div class="ic-value gold">3 meses</div></div>
+    <div class="info-cell" style="grid-column:1/-1"><div class="ic-label">Dirigido a</div><div class="ic-value">Artistas escenicos en formacion - Musica, Teatro, Danza</div></div>
+  </div>
+</section>
+<div class="section-divider"><div class="sdl"></div><div class="sdd"></div><div class="sdr"></div></div>
+<section>
+  <div class="section-label">Instructor</div>
+  <div class="instructor-row">
+    <div class="il"></div>
+    <div><div class="instructor-name-display">Gerard Estrada</div><div class="instructor-sub">Impartido por</div></div>
+    <div class="il"></div>
+  </div>
+</section>
+<div class="section-divider"><div class="sdl"></div><div class="sdd"></div><div class="sdr"></div></div>
+<section id="precios">
+  <div class="section-label">Inversion</div>
+  <div class="pricing-grid">
+    <div class="price-card featured">
+      <div class="pc-tier">Pago unico - Todo el taller</div>
+      <div class="pc-amount"><span class="pc-currency">$</span>3,000</div>
+      <div class="pc-period">MXN - pago unico</div>
+      <div class="pc-desc">3 meses completos al mejor precio</div>
+      <span class="pc-saving">Ahorra $1,500</span>
+      <a href="https://mpago.la/1L6Uf8U" class="pc-btn" target="_blank">Pagar ahora</a>
+    </div>
+    <div class="price-card">
+      <div class="pc-tier">Mensual - Publico general</div>
+      <div class="pc-amount"><span class="pc-currency">$</span>1,500</div>
+      <div class="pc-period">MXN / mes</div>
+      <div class="pc-desc">Tarifa regular por sesiones mensuales</div>
+      <a href="https://mpago.la/32eLJ4o" class="pc-btn" target="_blank">Pagar mes</a>
+    </div>
+    <div class="price-card">
+      <div class="pc-tier">Mensual - Con codigo</div>
+      <div class="pc-amount"><span class="pc-currency">$</span>1,200</div>
+      <div class="pc-period">MXN / mes</div>
+      <div class="pc-desc">Aplica tu codigo al momento del pago</div>
+      <a href="https://mpago.la/2a8VLsr" class="pc-btn" target="_blank">Pagar con codigo</a>
+    </div>
+  </div>
+  <div class="discount-note">Tienes codigo de descuento? Aplicalo directamente al momento del pago</div>
+</section>
+<div class="section-divider"><div class="sdl"></div><div class="sdd"></div><div class="sdr"></div></div>
+<section id="lugar">
+  <div class="section-label">Sede</div>
+  <div class="location-card">
+    <div class="loc-icon">📍</div>
+    <div>
+      <div class="loc-label">Ubicacion</div>
+      <div class="loc-address">Coahuila 184</div>
+      <div class="loc-neighborhood">Col. Roma Sur - Ciudad de Mexico</div>
+    </div>
+  </div>
+</section>
+<div class="section-divider"><div class="sdl"></div><div class="sdd"></div><div class="sdr"></div></div>
+<section id="registro">
+  <div class="section-label">Registro e Informacion</div>
+  <div class="social-handles">
+    <a href="https://instagram.com/facultaddecine" class="social-handle" target="_blank">@facultaddecine</a>
+    <a href="https://instagram.com/el_estudiob" class="social-handle" target="_blank">@el_estudiob</a>
+    <a href="https://instagram.com/geerardjk" class="social-handle" target="_blank">@geerardjk</a>
+  </div>
+  <div class="form-block">
+    <form action="https://formspree.io/f/xnjozedb" method="POST">
+      <div class="form-row">
+        <label class="form-label">Nombre completo</label>
+        <input class="form-input" type="text" name="nombre" placeholder="Tu nombre" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Correo electronico</label>
+        <input class="form-input" type="email" name="correo" placeholder="tu@correo.com" required>
+      </div>
+      <div class="form-row">
+        <label class="form-label">WhatsApp / Telefono</label>
+        <input class="form-input" type="tel" name="telefono" placeholder="55 1234 5678">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Disciplina</label>
+        <select class="form-select" name="disciplina">
+          <option value="">Selecciona tu disciplina</option>
+          <option value="Musica">Musica</option>
+          <option value="Teatro">Teatro</option>
+          <option value="Danza">Danza</option>
+          <option value="Otra">Otra</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Modalidad de pago</label>
+        <select class="form-select" name="pago">
+          <option value="">Selecciona una opcion</option>
+          <option value="Pago unico $3,000">Pago unico - $3,000 todo el taller</option>
+          <option value="Mensual $1,500">Mensual - $1,500 / mes</option>
+          <option value="Mensual con codigo $1,200">Mensual con codigo - $1,200 / mes</option>
+        </select>
+      </div>
+      <button class="form-submit" type="submit">Enviar registro</button>
+      <div class="form-note">Recibiras confirmacion por correo. Despues completa tu pago en los enlaces de arriba.</div>
+    </form>
+  </div>
+</section>
+<footer>
+  <div class="footer-logos">
+    <span class="footer-logo">Studio B</span>
+    <div class="footer-dot"></div>
+    <span class="footer-logo">Facultad de Cine</span>
+    <div class="footer-dot"></div>
+    <span class="footer-logo">FECIJ</span>
+  </div>
+  <div class="footer-copy">CDMX 2026</div>
+</footer>
+</body>
+</html>
