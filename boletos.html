@@ -387,6 +387,8 @@ window.handlePay = async () => {
   state.error=""; state.loading=true; render();
 
   const orderId = "KP-" + Math.random().toString(36).slice(2,8).toUpperCase();
+
+  // Intentar guardar en Firebase, pero continuar aunque falle
   try {
     await setDoc(doc(db,"kpop_show","orders",orderId), {
       id: orderId,
@@ -398,23 +400,21 @@ window.handlePay = async () => {
       status: "pending",
       createdAt: serverTimestamp(),
     });
-
-    sessionStorage.setItem("kpop_order", JSON.stringify({
-      id: orderId, show: state.show, zone: state.zone,
-      qty: state.qty, form: state.form,
-      discount: state.discount, total: finalTotal(),
-    }));
-
-    // Mostrar pantalla de instrucciones con el monto exacto
-    state.loading = false;
-    state.step = "pay_instructions";
-    state.pendingOrderId = orderId;
-    render();
-
   } catch(e) {
-    state.error = "Error al procesar. Intenta de nuevo.";
-    state.loading = false; render();
+    console.warn("Firebase no disponible, continuando sin guardar:", e);
   }
+
+  // Siempre continuar al pago independientemente de Firebase
+  sessionStorage.setItem("kpop_order", JSON.stringify({
+    id: orderId, show: state.show, zone: state.zone,
+    qty: state.qty, form: state.form,
+    discount: state.discount, total: finalTotal(),
+  }));
+
+  state.loading = false;
+  state.step = "pay_instructions";
+  state.pendingOrderId = orderId;
+  render();
 };
 
 window.goToMP = () => {
