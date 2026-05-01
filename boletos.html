@@ -8,84 +8,88 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@300;400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-<!-- Firebase compat (sin type=module, funciona en Safari iOS) -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<script>
-var firebaseConfig = {
-  apiKey: "AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU",
-  authDomain: "tributo-kpop-demon-hunters.firebaseapp.com",
-  projectId: "tributo-kpop-demon-hunters",
-  storageBucket: "tributo-kpop-demon-hunters.firebasestorage.app",
+const firebaseConfig = {
+  apiKey:            "AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU",
+  authDomain:        "tributo-kpop-demon-hunters.firebaseapp.com",
+  projectId:         "tributo-kpop-demon-hunters",
+  storageBucket:     "tributo-kpop-demon-hunters.firebasestorage.app",
   messagingSenderId: "964475171923",
-  appId: "1:964475171923:web:0ce2d4f3e720709f0002a6"
+  appId:             "1:964475171923:web:0ce2d4f3e720709f0002a6",
+  measurementId:     "G-S6M23FJLQK"
 };
-firebase.initializeApp(firebaseConfig);
-var db = firebase.firestore();
 
-var MP_LINK = "https://link.mercadopago.com.mx/demontickets";
+const MP_LINK = "https://link.mercadopago.com.mx/demontickets";
 
-var DISCOUNT_CODES = [
-  { code: "KPOP2025", pct: 20, label: "20% de descuento" }
+const DISCOUNT_CODES = [
+  { code: "KPOP2025", pct: 20, label: "20% de descuento" },
 ];
 
-var SHOWS = [
-  { id:"apr30-17", date:"Jue 30 Abr", time:"17:00 hrs", label:"Funcion 1 · Dia del Nino",  tag:"SOLD OUT", tagColor:"#FF2D78", soldOut:true  },
-  { id:"apr30-18", date:"Jue 30 Abr", time:"18:45 hrs", label:"Funcion 2 · Dia del Nino",  tag:"SOLD OUT", tagColor:"#FF2D78", soldOut:true  },
-  { id:"may02-17", date:"Sab 2 May",  time:"17:00 hrs", label:"Funcion 3 · Fin de semana", tag:"FAMILIAR", tagColor:"#FFE600", soldOut:false },
-  { id:"may02-18", date:"Sab 2 May",  time:"18:45 hrs", label:"Funcion 4 · Fin de semana", tag:"FANS",     tagColor:"#FF2D78", soldOut:false }
+const SHOWS = [
+  { id:"apr30-17", date:"Jue 30 Abr", time:"17:00 hrs", label:"Función 1 · Día del Niño",  tag:"SOLD OUT", tagColor:"#FF2D78", soldOut:true  },
+  { id:"apr30-18", date:"Jue 30 Abr", time:"18:45 hrs", label:"Función 2 · Día del Niño",  tag:"SOLD OUT", tagColor:"#FF2D78", soldOut:true  },
+  { id:"may02-17", date:"Sáb 2 May",  time:"17:00 hrs", label:"Función 3 · Fin de semana", tag:"FAMILIAR", tagColor:"#FFE600", soldOut:false },
+  { id:"may02-18", date:"Sáb 2 May",  time:"18:45 hrs", label:"Función 4 · Fin de semana", tag:"FANS",     tagColor:"#FF2D78", soldOut:false },
 ];
-
-var ZONES = [
+const ZONES = [
   { id:"vip",  label:"VIP",        price:450, total:200, color:"#FFE600", desc:"Zona dorada · Frente al escenario" },
-  { id:"pref", label:"Preferente", price:350, total:400, color:"#FF2D78", desc:"Vista privilegiada · Planta baja"  },
-  { id:"seg",  label:"2do Piso",   price:250, total:400, color:"#00F5FF", desc:"Vista panoramica · Segundo nivel"  }
+  { id:"pref", label:"Preferente", price:350, total:400, color:"#FF2D78", desc:"Vista privilegiada · Planta baja" },
+  { id:"seg",  label:"2do Piso",   price:250, total:400, color:"#00F5FF", desc:"Vista panorámica · Segundo nivel" },
 ];
 
-var state = {
-  step:1, show:null, zone:null, qty:1,
-  discount:null, discountInput:"", discountMsg:"",
-  soldData:null, form:{name:"",email:"",phone:""},
-  loading:false, loadingDB:true, error:"", ticket:null
+const app  = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+
+let state = {
+  step: 1,
+  show: null, zone: null, qty: 1,
+  discount: null,
+  discountInput: "",
+  discountMsg: "",
+  soldData: null,
+  form: { name:"", email:"", phone:"", dni:"" },
+  loading: false,
+  loadingDB: true,
+  error: "",
+  ticket: null,
 };
 
-function loadSoldData() {
-  db.collection("kpop_show").doc("inventory").get().then(function(snap) {
-    if (snap.exists) {
+async function loadSoldData() {
+  try {
+    const snap = await getDoc(doc(db, "kpop_show", "inventory"));
+    if (snap.exists()) {
       state.soldData = snap.data();
     } else {
-      state.soldData = {};
-      SHOWS.forEach(function(s) {
-        state.soldData[s.id] = {};
-        ZONES.forEach(function(z) { state.soldData[s.id][z.id] = 0; });
+      const init = {};
+      SHOWS.forEach(s => {
+        init[s.id] = {};
+        ZONES.forEach(z => { init[s.id][z.id] = 0; });
       });
-      db.collection("kpop_show").doc("inventory").set(state.soldData);
+      await setDoc(doc(db, "kpop_show", "inventory"), init);
+      state.soldData = init;
     }
-    state.loadingDB = false;
-    render();
-  }).catch(function(e) {
+  } catch(e) {
+    console.error("Firebase error:", e);
     state.soldData = {};
-    SHOWS.forEach(function(s) {
-      state.soldData[s.id] = {};
-      ZONES.forEach(function(z) { state.soldData[s.id][z.id] = 0; });
-    });
-    state.loadingDB = false;
-    render();
-  });
+    SHOWS.forEach(s => { state.soldData[s.id]={}; ZONES.forEach(z=>{ state.soldData[s.id][z.id]=0; }); });
+  }
+  state.loadingDB = false;
+  render();
 }
 
 function avail(showId, zoneId) {
   if (!state.soldData) return 0;
-  var zone = ZONES.find(function(z) { return z.id === zoneId; });
-  return zone.total - ((state.soldData[showId] && state.soldData[showId][zoneId]) || 0);
+  const zone = ZONES.find(z=>z.id===zoneId);
+  return zone.total - (state.soldData[showId]?.[zoneId] || 0);
 }
 
 function baseTotal() {
   if (!state.zone) return 0;
-  return ZONES.find(function(z) { return z.id === state.zone; }).price * state.qty;
+  return ZONES.find(z=>z.id===state.zone).price * state.qty;
 }
 function discountAmt() {
   if (!state.discount) return 0;
@@ -94,300 +98,308 @@ function discountAmt() {
 function finalTotal() { return baseTotal() - discountAmt(); }
 
 function render() {
-  var appEl = document.getElementById("app");
-  if (!appEl) return;
+  const appEl = document.getElementById("app");
 
   if (state.loadingDB) {
-    appEl.innerHTML = '<div style="text-align:center;padding:60px 20px"><div class="spinner" style="width:36px;height:36px;border-width:3px;margin:0 auto 16px"></div><div style="font-family:monospace;font-size:12px;letter-spacing:3px;color:var(--muted)">CARGANDO...</div></div>';
+    appEl.innerHTML = `
+      <div style="text-align:center;padding:60px 20px">
+        <div class="spinner" style="width:36px;height:36px;border-width:3px;margin:0 auto 16px"></div>
+        <div style="font-family:monospace;font-size:12px;letter-spacing:3px;color:var(--muted)">CARGANDO DISPONIBILIDAD...</div>
+      </div>`;
     return;
   }
 
   if (state.step === "pay_instructions") { appEl.innerHTML = renderPayInstructions(); return; }
-  if (state.step === 4 && state.ticket)  { appEl.innerHTML = renderTicket(); generateQR(); return; }
+  if (state.step === 4 && state.ticket) { appEl.innerHTML = renderTicket(); generateQR(); return; }
 
-  var html = '<div class="steps-nav">';
-  html += '<div class="snav-item' + (state.step>=1?' active':'') + '"></div>';
-  html += '<div class="snav-item' + (state.step>=2?' active':'') + '"></div>';
-  html += '<div class="snav-item' + (state.step>=3?' active':'') + '"></div>';
-  html += '</div>';
+  let html = `
+    <div class="steps-nav">
+      <div class="snav-item ${state.step>=1?'active':''}"></div>
+      <div class="snav-item ${state.step>=2?'active':''}"></div>
+      <div class="snav-item ${state.step>=3?'active':''}"></div>
+    </div>`;
 
-  // PASO 1
-  html += '<div class="step-block"><div class="step-header"><span class="step-num">01</span><span class="step-title">Elige tu funcion</span></div>';
-  html += '<div class="show-grid">';
-  SHOWS.forEach(function(s) {
-    html += '<div class="show-card' + (s.soldOut?' sold-out':'') + (state.show===s.id?' active':'') + '" onclick="selectShow(\'' + s.id + '\')">';
-    html += '<div class="show-tag" style="color:' + s.tagColor + '">' + s.tag + '</div>';
-    html += '<div class="show-date">' + s.date + '</div>';
-    html += '<div class="show-time"' + (s.soldOut?' style="color:var(--muted);text-shadow:none"':'') + '>' + s.time + '</div>';
-    html += '<div class="show-label">' + s.label + '</div>';
-    if (s.soldOut) html += '<div class="sold-out-badge">AGOTADO</div>';
-    html += '</div>';
-  });
-  html += '</div>';
-  html += '<div class="soldout-note">Las funciones del 30 de abril estan agotadas. Quedan lugares para el 2 de mayo!</div>';
-  html += '</div>';
+  html += `
+    <div class="step-block">
+      <div class="step-header"><span class="step-num">01</span><span class="step-title">Elige tu función</span></div>
+      <div class="show-grid">
+        ${SHOWS.map(s=>`
+          <div class="show-card ${s.soldOut?'sold-out':''} ${state.show===s.id?'active':''}" onclick="${s.soldOut?'':` + "`selectShow('${s.id}')`" + `}">
+            <div class="show-tag" style="color:${s.tagColor}">${s.tag}</div>
+            <div class="show-date">${s.date}</div>
+            <div class="show-time" style="${s.soldOut?'color:var(--muted);text-shadow:none':''}">${s.time}</div>
+            <div class="show-label">${s.label}</div>
+            ${s.soldOut?'<div class="sold-out-badge">AGOTADO</div>':''}
+          </div>`).join("")}
+      </div>
+      <div class="soldout-note">Las funciones del 30 de abril están agotadas · Quedan lugares para el 2 de mayo</div>
+    </div>`;
 
-  // PASO 2
   if (state.step >= 2) {
-    html += '<div class="divider"></div><div class="step-block"><div class="step-header"><span class="step-num">02</span><span class="step-title">Elige zona</span></div>';
-    html += '<div class="zone-grid">';
-    ZONES.forEach(function(z) {
-      var av = avail(state.show, z.id);
-      var pct = Math.round(((z.total - av) / z.total) * 100);
-      var active = state.zone === z.id;
-      html += '<div class="zone-card' + (av<=0?' unavailable':'') + (active?' active':'') + '"';
-      if (active) html += ' style="border-color:' + z.color + ';background:rgba(0,0,0,.25);box-shadow:0 0 22px rgba(0,0,0,.3)"';
-      if (av > 0) html += ' onclick="selectZone(\'' + z.id + '\')"';
-      html += '>';
-      html += '<div class="zone-name" style="color:' + z.color + '">' + z.label + '</div>';
-      html += '<div class="zone-price">$' + z.price + '</div>';
-      html += '<div class="zone-desc">' + z.desc + '</div>';
-      html += '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%;background:' + z.color + '"></div></div>';
-      html += '<div class="zone-avail" style="color:' + z.color + '">' + (av>0 ? av+' disponibles' : 'Agotado') + '</div>';
-      html += '</div>';
-    });
-    html += '</div>';
-
-    if (state.zone) {
-      var maxQ = Math.min(8, avail(state.show, state.zone));
-      html += '<div class="qty-row">';
-      html += '<button class="qty-btn" onclick="changeQty(-1)"' + (state.qty<=1?' disabled':'') + '>-</button>';
-      html += '<div class="qty-num">' + state.qty + '</div>';
-      html += '<button class="qty-btn" onclick="changeQty(1)"' + (state.qty>=maxQ?' disabled':'') + '>+</button>';
-      html += '</div><div class="qty-hint">Maximo 8 boletos por compra</div>';
-      html += renderSummaryBar();
-    }
-    html += '</div>';
+    html += `<div class="divider"></div>
+    <div class="step-block">
+      <div class="step-header"><span class="step-num">02</span><span class="step-title">Elige zona</span></div>
+      <div class="zone-grid">
+        ${ZONES.map(z=>{
+          const av = avail(state.show, z.id);
+          const pct = Math.round(((z.total-av)/z.total)*100);
+          const active = state.zone===z.id;
+          return `
+          <div class="zone-card ${av<=0?'unavailable':''} ${active?'active':''}"
+            style="${active?`border-color:${z.color};background:rgba(0,0,0,.25);box-shadow:0 0 22px rgba(0,0,0,.3)`:''}"
+            onclick="${av>0?`selectZone('${z.id}')`:''}" >
+            <div class="zone-name" style="color:${z.color}">${z.label}</div>
+            <div class="zone-price">$${z.price}</div>
+            <div class="zone-desc">${z.desc}</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${z.color}"></div></div>
+            <div class="zone-avail" style="color:${z.color}">${av>0?`${av} disponibles`:'Agotado'}</div>
+          </div>`;
+        }).join("")}
+      </div>
+      ${state.zone ? `
+        <div class="qty-row">
+          <button class="qty-btn" onclick="changeQty(-1)" ${state.qty<=1?'disabled':''}>−</button>
+          <div class="qty-num">${state.qty}</div>
+          <button class="qty-btn" onclick="changeQty(1)" ${state.qty>=Math.min(8,avail(state.show,state.zone))?'disabled':''}>+</button>
+        </div>
+        <div class="qty-hint">Máximo 8 boletos por compra</div>
+        ${renderSummaryBar()}
+      ` : ''}
+    </div>`;
   }
 
-  // PASO 3
   if (state.step >= 3) {
-    html += '<div class="divider"></div><div class="step-block"><div class="step-header"><span class="step-num">03</span><span class="step-title">Tus datos</span></div>';
-    html += '<div class="form-grid">';
-    html += '<div class="form-full"><label>Nombre completo *</label><input type="text" placeholder="Tu nombre completo" value="' + state.form.name + '" oninput="setField(\'name\',this.value)"></div>';
-    html += '<div><label>Correo electronico *</label><input type="email" placeholder="correo@ejemplo.com" value="' + state.form.email + '" oninput="setField(\'email\',this.value)"></div>';
-    html += '<div><label>Telefono *</label><input type="tel" placeholder="55 1234 5678" value="' + state.form.phone + '" oninput="setField(\'phone\',this.value)"></div>';
-    html += '</div><div class="divider" style="margin:20px 0"></div>';
-
-    html += '<div class="discount-row"><div class="discount-label">Tienes un codigo de descuento?</div>';
-    html += '<div class="discount-input-wrap">';
-    html += '<input type="text" class="discount-input" placeholder="INGRESA TU CODIGO" value="' + state.discountInput + '" oninput="setDiscountInput(this.value)" style="text-transform:uppercase;letter-spacing:2px">';
-    html += '<button class="discount-btn" onclick="applyDiscount()">APLICAR</button>';
-    html += '</div>';
-    if (state.discountMsg) html += '<div class="discount-msg ' + (state.discount?'ok':'err') + '">' + state.discountMsg + '</div>';
-    if (state.discount) {
-      html += '<div class="discount-applied"><span>' + state.discount.label + '</span>';
-      html += '<span style="color:var(--yellow);font-weight:700">-' + state.discount.pct + '% (-$' + discountAmt().toLocaleString() + ')</span>';
-      html += '<button onclick="removeDiscount()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;margin-left:auto">x</button></div>';
-    }
-    html += '</div>';
-
-    html += renderFinalSummary();
-    if (state.error) html += '<div class="alert-error">' + state.error + '</div>';
-
-    var disabled = state.loading || !state.form.name || !state.form.email || !state.form.phone;
-    html += '<button class="btn-primary" onclick="handlePay()"' + (disabled?' disabled':'') + '>';
-    html += state.loading ? '<span class="spinner"></span>PROCESANDO...' : 'PAGAR $' + finalTotal().toLocaleString() + ' MXN - MERCADOPAGO';
-    html += '</button>';
-    html += '<div class="mp-badge">PAGO SEGURO - TU BOLETO QR LLEGA AL INSTANTE</div>';
-    html += '</div>';
+    html += `<div class="divider"></div>
+    <div class="step-block">
+      <div class="step-header"><span class="step-num">03</span><span class="step-title">Tus datos</span></div>
+      <div class="form-grid">
+        <div class="form-full">
+          <label>Nombre completo *</label>
+          <input type="text" placeholder="Tu nombre completo" value="${state.form.name}" oninput="setField('name',this.value)">
+        </div>
+        <div>
+          <label>Correo electrónico *</label>
+          <input type="email" placeholder="correo@ejemplo.com" value="${state.form.email}" oninput="setField('email',this.value)">
+        </div>
+        <div>
+          <label>Teléfono *</label>
+          <input type="tel" placeholder="55 1234 5678" value="${state.form.phone}" oninput="setField('phone',this.value)">
+        </div>
+      </div>
+      <div class="divider" style="margin:20px 0"></div>
+      <div class="discount-row">
+        <div class="discount-label">¿Tienes un código de descuento?</div>
+        <div class="discount-input-wrap">
+          <input type="text" class="discount-input" placeholder="INGRESA TU CÓDIGO"
+            value="${state.discountInput}"
+            oninput="setDiscountInput(this.value)"
+            style="text-transform:uppercase;letter-spacing:2px">
+          <button class="discount-btn" onclick="applyDiscount()">APLICAR</button>
+        </div>
+        ${state.discountMsg ? `<div class="discount-msg ${state.discount?'ok':'err'}">${state.discountMsg}</div>` : ''}
+        ${state.discount ? `
+          <div class="discount-applied">
+            <span>✦ ${state.discount.label}</span>
+            <span style="color:var(--yellow);font-weight:700">−${state.discount.pct}% (−$${discountAmt().toLocaleString()})</span>
+            <button onclick="removeDiscount()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;margin-left:auto">✕</button>
+          </div>` : ''}
+      </div>
+      ${renderFinalSummary()}
+      ${state.error?`<div class="alert-error">${state.error}</div>`:''}
+      <button class="btn-primary" onclick="handlePay()"
+        ${state.loading||!state.form.name||!state.form.email||!state.form.phone?'disabled':''}>
+        ${state.loading
+          ?'<span class="spinner"></span>PROCESANDO...'
+          :`✦ PAGAR $${finalTotal().toLocaleString()} MXN · MERCADOPAGO ✦`}
+      </button>
+      <div class="mp-badge">🔒 PAGO SEGURO · TU BOLETO QR LLEGA AL INSTANTE</div>
+    </div>`;
   }
 
   appEl.innerHTML = html;
 }
 
 function renderSummaryBar() {
-  var show = SHOWS.find(function(s) { return s.id === state.show; });
-  var zone = ZONES.find(function(z) { return z.id === state.zone; });
-  return '<div class="summary-bar"><div class="summary-info">' + show.date + ' - ' + show.time + '<br><strong>' + zone.label + '</strong> x ' + state.qty + ' boleto' + (state.qty>1?'s':'') + '</div><div class="summary-total">$' + baseTotal().toLocaleString() + '</div></div>';
+  const show = SHOWS.find(s=>s.id===state.show);
+  const zone = ZONES.find(z=>z.id===state.zone);
+  return `
+    <div class="summary-bar">
+      <div class="summary-info">
+        ${show.date} · ${show.time}<br>
+        <strong>${zone.label}</strong> × ${state.qty} boleto${state.qty>1?'s':''}
+      </div>
+      <div class="summary-total">$${baseTotal().toLocaleString()}</div>
+    </div>`;
 }
 
 function renderFinalSummary() {
   if (!state.zone) return "";
-  var zone = ZONES.find(function(z) { return z.id === state.zone; });
-  var html = '<div class="final-summary">';
-  html += '<div class="fs-row"><span>Zona ' + zone.label + ' x ' + state.qty + '</span><span>$' + baseTotal().toLocaleString() + '</span></div>';
-  if (state.discount) html += '<div class="fs-row discount"><span>Descuento ' + state.discount.code + ' (' + state.discount.pct + '%)</span><span>-$' + discountAmt().toLocaleString() + '</span></div>';
-  html += '<div class="fs-divider"></div>';
-  html += '<div class="fs-row total"><span>TOTAL</span><span style="color:var(--cyan)">$' + finalTotal().toLocaleString() + ' MXN</span></div>';
-  html += '</div>';
-  return html;
+  const zone = ZONES.find(z=>z.id===state.zone);
+  return `
+    <div class="final-summary">
+      <div class="fs-row"><span>Zona ${zone.label} × ${state.qty}</span><span>$${baseTotal().toLocaleString()}</span></div>
+      ${state.discount ? `<div class="fs-row discount"><span>Descuento ${state.discount.code} (${state.discount.pct}%)</span><span>−$${discountAmt().toLocaleString()}</span></div>` : ''}
+      <div class="fs-divider"></div>
+      <div class="fs-row total"><span>TOTAL</span><span style="color:var(--cyan)">$${finalTotal().toLocaleString()} MXN</span></div>
+    </div>`;
 }
 
 function renderPayInstructions() {
-  var zone = ZONES.find(function(z) { return z.id === state.zone; });
-  var total = finalTotal();
-  return '<div class="ticket-wrap" style="text-align:center">' +
-    '<div style="font-size:36px;margin-bottom:10px">Pago</div>' +
-    '<div class="ticket-title">INSTRUCCIONES DE PAGO</div>' +
-    '<div class="ticket-sub">Sigue estos pasos para completar tu compra</div>' +
-    '<div style="background:rgba(255,230,0,.08);border:2px solid var(--yellow);border-radius:12px;padding:20px;margin:20px 0">' +
-    '<div style="font-family:monospace;font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:8px">MONTO EXACTO A PAGAR</div>' +
-    '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:52px;color:var(--yellow);letter-spacing:2px">$' + total.toLocaleString() + '</div>' +
-    '<div style="font-family:monospace;font-size:11px;color:var(--muted);margin-top:4px">MXN - ' + zone.label + ' x ' + state.qty + ' boleto' + (state.qty>1?'s':'') + '</div>' +
-    '</div>' +
-    '<div style="background:rgba(0,0,0,.3);border-radius:10px;padding:16px;text-align:left;margin-bottom:20px;font-size:13px;color:var(--text);line-height:2">' +
-    '<strong style="color:#fff">1.</strong> Toca el boton IR A MERCADOPAGO<br>' +
-    '<strong style="color:#fff">2.</strong> Ingresa el monto exacto: <strong style="color:var(--yellow)">$' + total.toLocaleString() + '</strong><br>' +
-    '<strong style="color:#fff">3.</strong> Completa el pago y regresa para recibir tu boleto QR' +
-    '</div>' +
-    '<button class="btn-primary" onclick="goToMP()">IR A MERCADOPAGO - $' + total.toLocaleString() + ' MXN</button>' +
-    '<button class="btn-secondary" onclick="resetApp()">REGRESAR</button>' +
-    '</div>';
+  const zone = ZONES.find(z=>z.id===state.zone);
+  const total = finalTotal();
+  return `
+  <div class="ticket-wrap" style="text-align:center">
+    <div style="font-size:36px;margin-bottom:10px">💳</div>
+    <div class="ticket-title">INSTRUCCIONES DE PAGO</div>
+    <div class="ticket-sub">Sigue estos pasos para completar tu compra</div>
+    <div style="background:rgba(255,230,0,.08);border:2px solid var(--yellow);border-radius:12px;padding:20px;margin:20px 0">
+      <div style="font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;color:var(--muted);margin-bottom:8px">MONTO EXACTO A PAGAR</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:var(--yellow);text-shadow:0 0 20px rgba(255,230,0,.5);letter-spacing:2px">$${total.toLocaleString()}</div>
+      <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);margin-top:4px">MXN · ${zone.label} × ${state.qty} boleto${state.qty>1?'s':''}</div>
+    </div>
+    <div style="background:rgba(0,0,0,.3);border-radius:10px;padding:16px;text-align:left;margin-bottom:20px">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#fff;margin-bottom:12px">PASOS A SEGUIR:</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="background:var(--pink);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:14px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+          <div style="font-size:13px;color:var(--text)">Toca el botón <strong>"IR A MERCADOPAGO"</strong> aquí abajo</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="background:var(--pink);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:14px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+          <div style="font-size:13px;color:var(--text)">En MercadoPago ingresa el monto exacto: <strong style="color:var(--yellow)">$${total.toLocaleString()}</strong></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="background:var(--pink);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:14px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+          <div style="font-size:13px;color:var(--text)">Completa el pago y regresa a esta página para recibir tu boleto QR</div>
+        </div>
+      </div>
+    </div>
+    <div style="background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.2);border-radius:8px;padding:12px;margin-bottom:20px;font-size:12px;color:var(--muted)">
+      ⚠️ <strong style="color:#fff">Importante:</strong> El monto debe coincidir exactamente con <strong style="color:var(--yellow)">$${total.toLocaleString()} MXN</strong> para que tu compra sea validada.
+    </div>
+    <button class="btn-primary" onclick="window.goToMP()">IR A MERCADOPAGO · $${total.toLocaleString()} MXN →</button>
+    <button class="btn-secondary" onclick="window.resetApp()">← REGRESAR</button>
+  </div>`;
 }
 
 function renderTicket() {
-  var t = state.ticket;
-  return '<div class="ticket-wrap">' +
-    '<div style="font-size:36px;margin-bottom:10px">Listo!</div>' +
-    '<div class="ticket-title">Compra exitosa!</div>' +
-    '<div class="ticket-sub">Presenta este QR en la entrada del teatro</div>' +
-    '<div id="qr-canvas" style="width:200px;height:200px;margin:0 auto 24px"></div>' +
-    '<div class="ticket-detail">' +
-    '<div><div class="tk-key">Evento</div><div class="tk-val">Demon Hunters K-Pop</div></div>' +
-    '<div><div class="tk-key">Fecha</div><div class="tk-val">' + t.show.date + '</div></div>' +
-    '<div><div class="tk-key">Hora</div><div class="tk-val">' + t.show.time + '</div></div>' +
-    '<div><div class="tk-key">Zona</div><div class="tk-val" style="color:' + t.zone.color + '">' + t.zone.label + '</div></div>' +
-    '<div><div class="tk-key">Boletos</div><div class="tk-val">' + t.qty + '</div></div>' +
-    '<div><div class="tk-key">Total</div><div class="tk-val" style="color:var(--cyan)">$' + t.total.toLocaleString() + ' MXN</div></div>' +
-    '<div class="tk-full"><div class="tk-key">Comprador</div><div class="tk-val">' + t.buyer.name + '</div></div>' +
-    '<div class="tk-full"><div class="tk-key">Correo</div><div class="tk-val">' + t.buyer.email + '</div></div>' +
-    '</div>' +
-    '<div class="ticket-id">ID: ' + t.id + '</div>' +
-    '<div class="alert-info" style="margin:16px 0">Toma una captura de pantalla como respaldo</div>' +
-    '<button class="btn-secondary" onclick="resetApp()">COMPRAR OTRO BOLETO</button>' +
-    '</div>';
+  const t = state.ticket;
+  return `
+  <div class="ticket-wrap">
+    <div style="font-size:36px;margin-bottom:10px">🎉</div>
+    <div class="ticket-title">¡Compra exitosa!</div>
+    <div class="ticket-sub">Presenta este QR en la entrada del teatro</div>
+    <div id="qr-canvas" style="width:200px;height:200px;margin:0 auto 24px"></div>
+    <div class="ticket-detail">
+      <div><div class="tk-key">Evento</div><div class="tk-val">Demon Hunters K-Pop</div></div>
+      <div><div class="tk-key">Fecha</div><div class="tk-val">${t.show.date}</div></div>
+      <div><div class="tk-key">Hora</div><div class="tk-val">${t.show.time}</div></div>
+      <div><div class="tk-key">Zona</div><div class="tk-val" style="color:${t.zone.color}">${t.zone.label}</div></div>
+      <div><div class="tk-key">Boletos</div><div class="tk-val">${t.qty}</div></div>
+      <div><div class="tk-key">Precio c/u</div><div class="tk-val">$${t.unitPrice.toLocaleString()} MXN</div></div>
+      ${t.discount?`<div><div class="tk-key">Descuento</div><div class="tk-val" style="color:var(--yellow)">${t.discount.code} −${t.discount.pct}%</div></div>`:'<div></div>'}
+      <div><div class="tk-key">Total pagado</div><div class="tk-val" style="color:var(--cyan)">$${t.total.toLocaleString()} MXN</div></div>
+      <div class="tk-full"><div class="tk-key">Comprador</div><div class="tk-val">${t.buyer.name}</div></div>
+      <div class="tk-full"><div class="tk-key">Correo</div><div class="tk-val">${t.buyer.email}</div></div>
+    </div>
+    <div class="ticket-id">ID: ${t.id}</div>
+    <div class="alert-info" style="margin:16px 0">📸 Toma una captura de pantalla como respaldo</div>
+    <button class="btn-secondary" onclick="resetApp()">← COMPRAR OTRO BOLETO</button>
+  </div>`;
 }
 
-function selectShow(id) {
-  var show = SHOWS.find(function(s) { return s.id === id; });
+window.selectShow = (id) => {
+  const show = SHOWS.find(s=>s.id===id);
   if (show.soldOut) return;
-  state.show = id; state.zone = null; state.qty = 1;
-  if (state.step < 2) state.step = 2;
+  state.show=id; state.zone=null; state.qty=1;
+  if(state.step<2) state.step=2;
   render();
-}
-
-function selectZone(id) {
-  state.zone = id; state.qty = 1;
-  if (state.step < 3) state.step = 3;
+};
+window.selectZone = (id) => { state.zone=id; state.qty=1; if(state.step<3) state.step=3; render(); };
+window.changeQty  = (d) => {
+  const max=Math.min(8,avail(state.show,state.zone));
+  state.qty=Math.max(1,Math.min(max,state.qty+d)); render();
+};
+window.setField = (k,v) => { state.form[k]=v; };
+window.setDiscountInput = (v) => { state.discountInput=v.toUpperCase(); };
+window.applyDiscount = () => {
+  const code = state.discountInput.trim().toUpperCase();
+  const found = DISCOUNT_CODES.find(d=>d.code===code);
+  if (found) { state.discount=found; state.discountMsg=`✓ Código válido: ${found.label}`; }
+  else { state.discount=null; state.discountMsg="✗ Código no válido. Verifica e intenta de nuevo."; }
   render();
-}
-
-function changeQty(d) {
-  var max = Math.min(8, avail(state.show, state.zone));
-  state.qty = Math.max(1, Math.min(max, state.qty + d));
-  render();
-}
-
-function setField(k, v) { state.form[k] = v; }
-
-function setDiscountInput(v) { state.discountInput = v.toUpperCase(); }
-
-function applyDiscount() {
-  var code = state.discountInput.trim().toUpperCase();
-  var found = DISCOUNT_CODES.find(function(d) { return d.code === code; });
-  if (found) {
-    state.discount = found;
-    state.discountMsg = "Codigo valido: " + found.label;
-  } else {
-    state.discount = null;
-    state.discountMsg = "Codigo no valido. Verifica e intenta de nuevo.";
-  }
-  render();
-}
-
-function removeDiscount() { state.discount = null; state.discountMsg = ""; state.discountInput = ""; render(); }
-
-function handlePay() {
-  if (!state.form.name || !state.form.email || !state.form.phone) {
-    state.error = "Por favor completa todos los campos."; render(); return;
-  }
-  state.error = ""; state.loading = true; render();
-  var orderId = "KP-" + Math.random().toString(36).slice(2,8).toUpperCase();
-  var zone = ZONES.find(function(z) { return z.id === state.zone; });
-
-  db.collection("kpop_show").doc("orders").collection("items").doc(orderId).set({
-    id: orderId, show: state.show, zone: state.zone, qty: state.qty,
-    unitPrice: zone.price, discount: state.discount || null,
-    total: finalTotal(), buyer: state.form, status: "pending",
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(function(e) { console.warn("Firebase error:", e); }).finally(function() {
-    sessionStorage.setItem("kpop_order", JSON.stringify({
-      id: orderId, show: state.show, zone: state.zone,
-      qty: state.qty, form: state.form, discount: state.discount, total: finalTotal()
-    }));
-    state.loading = false;
-    state.step = "pay_instructions";
-    render();
-  });
-}
-
-function goToMP() { window.location.href = MP_LINK; }
-
-function resetApp() {
+};
+window.removeDiscount = () => { state.discount=null; state.discountMsg=""; state.discountInput=""; render(); };
+window.handlePay = async () => {
+  const { name, email, phone } = state.form;
+  if (!name||!email||!phone) { state.error="Por favor completa todos los campos."; render(); return; }
+  state.error=""; state.loading=true; render();
+  const orderId = "KP-" + Math.random().toString(36).slice(2,8).toUpperCase();
+  try {
+    await setDoc(doc(db,"kpop_show","orders",orderId), {
+      id: orderId, show: state.show, zone: state.zone, qty: state.qty,
+      unitPrice: ZONES.find(z=>z.id===state.zone).price,
+      discount: state.discount || null, total: finalTotal(),
+      buyer: state.form, status: "pending", createdAt: serverTimestamp(),
+    });
+  } catch(e) { console.warn("Firebase no disponible:", e); }
+  sessionStorage.setItem("kpop_order", JSON.stringify({
+    id: orderId, show: state.show, zone: state.zone,
+    qty: state.qty, form: state.form, discount: state.discount, total: finalTotal(),
+  }));
+  state.loading=false; state.step="pay_instructions"; render();
+};
+window.goToMP = () => { window.location.href = MP_LINK; };
+window.resetApp = () => {
   state = { step:1, show:null, zone:null, qty:1, discount:null, discountInput:"",
-    discountMsg:"", soldData:state.soldData, form:{name:"",email:"",phone:""},
+    discountMsg:"", soldData:state.soldData, form:{name:"",email:"",phone:"",dni:""},
     loading:false, loadingDB:false, error:"", ticket:null };
   render();
-}
-
+};
 function generateQR() {
-  var t = state.ticket;
-  var data = "DEMONHUNTERS|" + t.id + "|" + t.show.id + "|" + t.zone.id + "|" + t.qty + "|" + t.buyer.email;
+  const t = state.ticket;
+  const data = `DEMONHUNTERS|${t.id}|${t.show.id}|${t.zone.id}|${t.qty}|${t.buyer.email}`;
   new QRCode(document.getElementById("qr-canvas"), {
-    text: data, width:200, height:200,
+    text:data, width:200, height:200,
     colorDark:"#FF2D78", colorLight:"#0D0025",
     correctLevel: QRCode.CorrectLevel.M
   });
 }
-
-function checkReturnFromMP() {
-  var params = new URLSearchParams(window.location.search);
-  var paymentStatus = params.get("status") || params.get("collection_status");
-  var pending = sessionStorage.getItem("kpop_order");
+async function checkReturnFromMP() {
+  const params = new URLSearchParams(window.location.search);
+  const paymentStatus = params.get("status") || params.get("collection_status");
+  const pending = sessionStorage.getItem("kpop_order");
   if (paymentStatus === "approved" && pending) {
-    var order = JSON.parse(pending);
+    const order = JSON.parse(pending);
     sessionStorage.removeItem("kpop_order");
-    db.collection("kpop_show").doc("orders").collection("items").doc(order.id).update({
-      status: "paid", paidAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(function(e) { console.error(e); });
-    var show = SHOWS.find(function(s) { return s.id === order.show; });
-    var zone = ZONES.find(function(z) { return z.id === order.zone; });
-    state.ticket = { id:order.id, show:show, zone:zone, qty:order.qty,
+    try {
+      await updateDoc(doc(db,"kpop_show","orders",order.id), { status:"paid", paidAt:serverTimestamp() });
+      await updateDoc(doc(db,"kpop_show","inventory"), { [`${order.show}.${order.zone}`]: increment(order.qty) });
+    } catch(e) { console.error(e); }
+    const show = SHOWS.find(s=>s.id===order.show);
+    const zone = ZONES.find(z=>z.id===order.zone);
+    state.ticket = { id:order.id, show, zone, qty:order.qty, unitPrice:zone.price,
       discount:order.discount, total:order.total, buyer:order.form };
-    state.step = 4;
-    state.loadingDB = false;
-    render();
+    state.step=4; state.loadingDB=false; render();
     return true;
+  }
+  if (paymentStatus && paymentStatus !== "approved") {
+    state.error = "El pago no fue completado. Puedes intentarlo de nuevo.";
   }
   return false;
 }
-
-// Exponer funciones globales
-window.selectShow      = selectShow;
-window.selectZone      = selectZone;
-window.changeQty       = changeQty;
-window.setField        = setField;
-window.setDiscountInput = setDiscountInput;
-window.applyDiscount   = applyDiscount;
-window.removeDiscount  = removeDiscount;
-window.handlePay       = handlePay;
-window.goToMP          = goToMP;
-window.resetApp        = resetApp;
-
 render();
-var returned = checkReturnFromMP();
-if (!returned) loadSoldData();
+checkReturnFromMP().then(wasReturn => { if (!wasReturn) loadSoldData(); });
 </script>
 
 </head>
 <body>
 <div class="wrap">
   <div class="hero">
-    <div class="eyebrow">Venta Oficial de Boletos</div>
+    <div class="eyebrow">✦ Venta Oficial de Boletos ✦</div>
     <h1>TRIBUTO<br><span>K-POP</span></h1>
     <div class="hero-demon">DEMON HUNTERS</div>
-    <div class="hero-sub">Dia del Nino · 30 Abr &amp; 2 May · 2026</div>
+    <div class="hero-sub">Día del Niño · 30 Abr &amp; 2 May · 2026</div>
   </div>
   <div id="app"></div>
 </div>
@@ -421,7 +433,7 @@ h1 span{color:var(--cyan);text-shadow:0 0 30px rgba(0,245,255,.7);}
 .show-date{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:#fff;}
 .show-time{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--pink);letter-spacing:1px;text-shadow:0 0 15px rgba(255,45,120,.5);}
 .show-label{font-size:11px;color:var(--muted);margin-top:4px;}
-.sold-out-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-15deg);background:rgba(255,45,120,.9);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:4px;padding:4px 14px;border-radius:4px;box-shadow:0 0 20px rgba(255,45,120,.5);}
+.sold-out-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-15deg);background:rgba(255,45,120,.9);color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:4px;padding:4px 14px;border-radius:4px;box-shadow:0 0 20px rgba(255,45,120,.5);pointer-events:none;}
 .soldout-note{text-align:center;margin-top:12px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--cyan);padding:8px;background:rgba(0,245,255,.05);border:1px solid rgba(0,245,255,.15);border-radius:6px;}
 .zone-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 @media(max-width:400px){.zone-grid{grid-template-columns:1fr;}}
@@ -441,19 +453,21 @@ h1 span{color:var(--cyan);text-shadow:0 0 30px rgba(0,245,255,.7);}
 .summary-bar{background:rgba(18,0,48,.9);border:1px solid rgba(255,45,120,.25);border-radius:10px;padding:14px 18px;margin-top:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
 .summary-info{font-size:13px;color:var(--muted);line-height:1.8;}
 .summary-info strong{color:#fff;}
-.summary-total{font-family:'Bebas Neue',sans-serif;font-size:34px;color:var(--cyan);letter-spacing:2px;}
+.summary-total{font-family:'Bebas Neue',sans-serif;font-size:34px;color:var(--cyan);letter-spacing:2px;text-shadow:0 0 15px rgba(0,245,255,.4);}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 @media(max-width:480px){.form-grid{grid-template-columns:1fr;}}
 .form-full{grid-column:1/-1;}
 label{display:block;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:5px;}
-input{width:100%;background:rgba(18,0,48,.9);border:1px solid rgba(255,45,120,.22);border-radius:7px;padding:11px 14px;color:var(--text);font-size:14px;outline:none;transition:border-color .2s;}
+input{width:100%;background:rgba(18,0,48,.9);border:1px solid rgba(255,45,120,.22);border-radius:7px;padding:11px 14px;color:var(--text);font-size:14px;outline:none;font-family:'Noto Sans KR',sans-serif;transition:border-color .2s;}
 input:focus{border-color:var(--pink);box-shadow:0 0 12px rgba(255,45,120,.2);}
 input::placeholder{color:rgba(139,122,170,.5);}
 .discount-row{background:rgba(18,0,48,.7);border:1px solid rgba(255,230,0,.15);border-radius:10px;padding:16px;margin-bottom:16px;}
 .discount-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
 .discount-input-wrap{display:flex;gap:8px;}
 .discount-input{flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,230,0,.2);border-radius:7px;padding:10px 14px;color:var(--yellow);font-family:'Space Mono',monospace;font-size:13px;letter-spacing:2px;}
-.discount-btn{background:rgba(255,230,0,.12);border:1px solid var(--yellow);color:var(--yellow);border-radius:7px;padding:10px 18px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;white-space:nowrap;}
+.discount-input:focus{border-color:var(--yellow);box-shadow:0 0 12px rgba(255,230,0,.2);}
+.discount-btn{background:rgba(255,230,0,.12);border:1px solid var(--yellow);color:var(--yellow);border-radius:7px;padding:10px 18px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;white-space:nowrap;transition:all .2s;}
+.discount-btn:hover{background:rgba(255,230,0,.2);}
 .discount-msg{font-size:12px;margin-top:8px;font-family:'Space Mono',monospace;letter-spacing:1px;}
 .discount-msg.ok{color:#4ade80;}
 .discount-msg.err{color:var(--pink);}
@@ -464,11 +478,13 @@ input::placeholder{color:rgba(139,122,170,.5);}
 .fs-row.total{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#fff;padding-top:8px;}
 .fs-divider{height:1px;background:rgba(255,255,255,.08);margin:8px 0;}
 .btn-primary{width:100%;padding:15px;border:none;border-radius:10px;cursor:pointer;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:4px;color:#fff;background:linear-gradient(90deg,#FF2D78,#FF6B9D);box-shadow:0 0 30px rgba(255,45,120,.4);transition:all .2s;margin-top:14px;}
-.btn-primary:disabled{background:rgba(255,255,255,.06);box-shadow:none;color:#555;cursor:not-allowed;}
-.btn-secondary{width:100%;padding:13px;border:1px solid rgba(255,45,120,.3);border-radius:10px;background:transparent;color:var(--pink);font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;cursor:pointer;margin-top:12px;}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 0 40px rgba(255,45,120,.6);}
+.btn-primary:disabled{background:rgba(255,255,255,.06);box-shadow:none;color:#555;cursor:not-allowed;transform:none;}
+.btn-secondary{width:100%;padding:13px;border:1px solid rgba(255,45,120,.3);border-radius:10px;background:transparent;color:var(--pink);font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;cursor:pointer;margin-top:12px;transition:all .2s;}
+.btn-secondary:hover{background:rgba(255,45,120,.08);}
 .alert-error{background:rgba(255,45,120,.1);border:1px solid var(--pink);border-radius:8px;padding:11px 16px;font-size:13px;color:var(--pink);margin-top:12px;text-align:center;}
 .alert-info{background:rgba(0,245,255,.07);border:1px solid rgba(0,245,255,.3);border-radius:8px;padding:11px 16px;font-size:11px;color:var(--cyan);text-align:center;font-family:'Space Mono',monospace;letter-spacing:1px;}
-.ticket-wrap{background:linear-gradient(135deg,rgba(255,45,120,.1),rgba(0,245,255,.05));border:1px solid rgba(0,245,255,.3);border-radius:16px;padding:36px 28px;text-align:center;}
+.ticket-wrap{background:linear-gradient(135deg,rgba(255,45,120,.1),rgba(0,245,255,.05));border:1px solid rgba(0,245,255,.3);border-radius:16px;padding:36px 28px;text-align:center;animation:fadeUp .5s ease both;}
 .ticket-title{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:4px;color:#fff;margin-bottom:4px;}
 .ticket-sub{font-size:12px;color:var(--muted);margin-bottom:28px;}
 .ticket-detail{background:rgba(0,0,0,.3);border-radius:8px;padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;text-align:left;margin-bottom:20px;}
