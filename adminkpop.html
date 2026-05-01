@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · Demon Hunters K-Pop</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+</head>
+<body>
+<header class="header">
+  <div class="brand">DEMON HUNTERS <span>ADMIN</span></div>
+  <div class="bsub">Studio B · Compras en tiempo real</div>
+</header>
+<div id="root"></div>
+<style>
+:root{--pk:#FF2D78;--cy:#00F5FF;--ye:#FFE600;--bg:#08001A;--c1:#0D0020;--c2:#110028;--mu:#7B6A9A;--tx:#F0E6FF;--br:rgba(255,255,255,.07);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;min-height:100vh;padding-bottom:60px;}
+.header{padding:1rem 1.5rem;background:rgba(13,0,32,.97);border-bottom:1px solid rgba(255,45,120,.15);position:sticky;top:0;z-index:10;}
+.brand{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.15em;color:var(--pk);}
+.brand span{color:var(--mu);margin-left:.5rem;}
+.bsub{font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.15em;color:var(--mu);margin-top:.1rem;}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:1rem;}
+.ltxt{font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.2em;color:var(--mu);}
+.spinner{width:28px;height:28px;border:2px solid rgba(255,45,120,.2);border-top-color:var(--pk);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.errbox{margin:1rem 1.5rem;padding:1rem;background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.3);border-radius:8px;font-family:'Space Mono',monospace;font-size:.68rem;color:var(--pk);}
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;padding:1.2rem 1.5rem;}
+@media(max-width:600px){.mgrid{grid-template-columns:1fr 1fr;}}
+.mc{background:var(--c1);border:1px solid var(--br);border-radius:10px;padding:.9rem 1.1rem;}
+.mc.accent{border-color:rgba(0,245,255,.2);}
+.mc.warn{border-color:rgba(255,230,0,.15);}
+.ml{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);margin-bottom:.4rem;}
+.mv{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:#fff;line-height:1;}
+.mc.accent .mv{color:var(--cy);}
+.mc.warn .mv{color:var(--ye);}
+.mn{font-size:.68rem;color:var(--mu);margin-top:.2rem;}
+.sgrid{padding:0 1.5rem 1rem;display:flex;flex-direction:column;gap:.8rem;}
+.st{font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:.2em;color:var(--mu);margin-bottom:.4rem;}
+.bg4{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;}
+.bg3{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;}
+@media(max-width:580px){.bg4,.bg3{grid-template-columns:1fr 1fr;}}
+.bc{background:var(--c2);border:1px solid var(--br);border-radius:7px;padding:.8rem .9rem;}
+.bc.so{opacity:.5;}
+.bl{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.07em;color:var(--mu);margin-bottom:.35rem;}
+.bso{background:var(--pk);color:#fff;font-size:.5rem;padding:.08rem .3rem;border-radius:2px;}
+.bv{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:#fff;line-height:1;}
+.bv span{font-size:.7rem;color:var(--mu);font-family:'DM Sans',sans-serif;}
+.bi{font-size:.7rem;color:var(--cy);margin-top:.1rem;}
+.filters{display:flex;gap:.45rem;padding:.8rem 1.5rem;flex-wrap:wrap;align-items:center;border-top:1px solid var(--br);border-bottom:1px solid var(--br);background:rgba(8,0,26,.85);position:sticky;top:54px;z-index:9;}
+.fs{flex:1;min-width:160px;background:rgba(0,0,0,.35);border:1px solid var(--br);border-radius:6px;padding:.45rem .8rem;color:var(--tx);font-size:.8rem;outline:none;}
+.fs::placeholder{color:var(--mu);}
+.fsel{background:rgba(0,0,0,.35);border:1px solid var(--br);border-radius:6px;padding:.45rem .6rem;color:var(--tx);font-family:'Space Mono',monospace;font-size:.58rem;outline:none;cursor:pointer;}
+.bexp{background:rgba(255,230,0,.08);border:1px solid rgba(255,230,0,.25);color:var(--ye);font-family:'Space Mono',monospace;font-size:.6rem;padding:.45rem .85rem;border-radius:6px;cursor:pointer;white-space:nowrap;margin-left:auto;}
+.bref{background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.2);color:var(--pk);font-family:'Space Mono',monospace;font-size:.6rem;padding:.45rem .7rem;border-radius:6px;cursor:pointer;}
+.tscroll{overflow-x:auto;padding:0 1.5rem;}
+.twrap{min-width:680px;}
+.thead{display:grid;grid-template-columns:110px 1fr 90px 80px 45px 75px 90px 100px;gap:.35rem;padding:.45rem .7rem;font-family:'Space Mono',monospace;font-size:.52rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);border-bottom:1px solid var(--br);}
+.trow{display:grid;grid-template-columns:110px 1fr 90px 80px 45px 75px 90px 100px;gap:.35rem;padding:.7rem .7rem;border-bottom:1px solid rgba(255,255,255,.03);align-items:center;}
+.trow:hover{background:rgba(255,255,255,.02);}
+.trow.pending{opacity:.55;}
+.td{font-size:.78rem;overflow:hidden;}
+.oid{font-family:'Space Mono',monospace;font-size:.55rem;color:var(--mu);}
+.bn{font-weight:500;font-size:.82rem;}
+.bs{font-size:.65rem;color:var(--mu);margin-top:.08rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.zb{font-family:'Space Mono',monospace;font-size:.56rem;border:1px solid;padding:.12rem .4rem;border-radius:3px;white-space:nowrap;}
+.qty{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;}
+.amt{font-family:'Bebas Neue',sans-serif;font-size:.95rem;color:var(--cy);}
+.stb{font-family:'Space Mono',monospace;font-size:.55rem;padding:.15rem .45rem;border-radius:4px;}
+.stb.paid{background:rgba(74,222,128,.1);color:#4ade80;border:1px solid rgba(74,222,128,.2);}
+.stb.pend{background:rgba(255,230,0,.08);color:var(--ye);border:1px solid rgba(255,230,0,.2);}
+.disc{font-family:'Space Mono',monospace;font-size:.54rem;background:rgba(255,230,0,.07);color:var(--ye);border:1px solid rgba(255,230,0,.15);padding:.08rem .4rem;border-radius:3px;}
+.none{color:#444;}
+.empty{text-align:center;padding:3rem;font-family:'Space Mono',monospace;font-size:.68rem;color:var(--mu);}
+.tfooter{padding:.65rem 1.5rem;font-family:'Space Mono',monospace;font-size:.55rem;color:var(--mu);}
+</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, getDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU",
+  authDomain: "tributo-kpop-demon-hunters.firebaseapp.com",
+  projectId: "tributo-kpop-demon-hunters",
+  storageBucket: "tributo-kpop-demon-hunters.firebasestorage.app",
+  messagingSenderId: "964475171923",
+  appId: "1:964475171923:web:0ce2d4f3e720709f0002a6",
+};
+
+const SHOWS = {
+  "apr30-17": "30 Abr 17:00",
+  "apr30-18": "30 Abr 18:45",
+  "may02-17": "2 May 17:00",
+  "may02-18": "2 May 18:45",
+};
+const ZONES = {
+  "vip":  { label:"VIP",        color:"#FFE600" },
+  "pref": { label:"Preferente", color:"#FF2D78" },
+  "seg":  { label:"2do Piso",   color:"#00F5FF" },
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db    = getFirestore(fbApp);
+
+let orders = [], filter = { show:"all", zone:"all", status:"all", search:"" }, loading = true, errMsg = "";
+
+async function loadData() {
+  loading = true; errMsg = ""; render();
+  try {
+    // Las ordenes se guardan con: setDoc(doc(db,"kpop_show","orders",orderId))
+    // Eso crea documentos en la subcoleccion "orders" dentro de la coleccion "kpop_show"
+    const snap = await getDocs(collection(db, "kpop_show", "orders"));
+    if (snap.docs.length > 0) {
+      orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } else {
+      // Fallback: buscar directamente en la coleccion raiz kpop_show
+      const snap2 = await getDocs(collection(db, "kpop_show"));
+      orders = snap2.docs
+        .filter(d => d.id !== "inventory" && d.data().show)
+        .map(d => ({ id: d.id, ...d.data() }));
+    }
+  } catch(e) {
+    errMsg = e.message;
+  }
+  loading = false; render();
+}
+
+function filtered() {
+  return orders.filter(o => {
+    if (filter.show   !== "all" && o.show   !== filter.show)   return false;
+    if (filter.zone   !== "all" && o.zone   !== filter.zone)   return false;
+    if (filter.status !== "all" && o.status !== filter.status) return false;
+    if (filter.search) {
+      const q = filter.search.toLowerCase();
+      if (!(o.buyer?.name  || "").toLowerCase().includes(q) &&
+          !(o.buyer?.email || "").toLowerCase().includes(q) &&
+          !(o.id || "").toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function metrics() {
+  const paid    = orders.filter(o => o.status === "paid" || o.status === "approved");
+  const pending = orders.filter(o => o.status === "pending");
+  const byShow  = {}, byZone = {};
+  Object.keys(SHOWS).forEach(k => { byShow[k] = { b:0, i:0 }; });
+  Object.keys(ZONES).forEach(k => { byZone[k] = { b:0, i:0 }; });
+  paid.forEach(o => {
+    if (byShow[o.show]) { byShow[o.show].b += (o.qty||0); byShow[o.show].i += (o.total||0); }
+    if (byZone[o.zone]) { byZone[o.zone].b += (o.qty||0); byZone[o.zone].i += (o.total||0); }
+  });
+  return {
+    paid: paid.length, pending: pending.length, total: orders.length,
+    ingresos: paid.reduce((s,o) => s + (o.total||0), 0),
+    boletos:  paid.reduce((s,o) => s + (o.qty||0),   0),
+    byShow, byZone
+  };
+}
+
+function exportCSV() {
+  const rows = filtered();
+  const h = ["ID","Nombre","Email","Telefono","Funcion","Zona","Boletos","Total","Estado","Descuento","Codigo"];
+  const lines = rows.map(o => {
+    const b = o.buyer || {};
+    return [
+      o.id, b.name||"", b.email||"", b.phone||"",
+      SHOWS[o.show]||o.show||"", ZONES[o.zone]?.label||o.zone||"",
+      o.qty||1, o.total||0, o.status||"",
+      o.discount ? o.discount.pct+"%" : "",
+      o.discount?.code || "",
+    ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(",");
+  });
+  const csv  = [h.join(",")].concat(lines).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = "kpop-ordenes.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function render() {
+  document.getElementById("root").innerHTML = loading ? renderLoading() : renderDash();
+  if (!loading) bindEvents();
+}
+
+function renderLoading() {
+  return '<div class="loading"><div class="spinner"></div><div class="ltxt">CONECTANDO CON FIREBASE...</div></div>';
+}
+
+function renderDash() {
+  const m = metrics(), rows = filtered();
+  var html = "";
+
+  if (errMsg) {
+    html += '<div class="errbox">Error Firebase: ' + errMsg + '</div>';
+  }
+
+  html += '<div class="mgrid">';
+  html += '<div class="mc accent"><div class="ml">Ingresos confirmados</div><div class="mv">$' + m.ingresos.toLocaleString() + '</div><div class="mn">MXN pagados</div></div>';
+  html += '<div class="mc"><div class="ml">Boletos vendidos</div><div class="mv">' + m.boletos + '</div><div class="mn">' + m.paid + ' ordenes</div></div>';
+  html += '<div class="mc warn"><div class="ml">Pendientes</div><div class="mv">' + m.pending + '</div><div class="mn">sin pago</div></div>';
+  html += '<div class="mc"><div class="ml">Total ordenes</div><div class="mv">' + m.total + '</div><div class="mn">todas las funciones</div></div>';
+  html += '</div>';
+
+  html += '<div class="sgrid">';
+  html += '<div><div class="st">Por funcion</div><div class="bg4">';
+  Object.keys(SHOWS).forEach(function(id) {
+    var lb = SHOWS[id], d = m.byShow[id] || { b:0, i:0 }, so = id.indexOf("apr30") === 0;
+    html += '<div class="bc' + (so ? ' so' : '') + '">';
+    html += '<div class="bl">' + lb + (so ? ' <span class="bso">SOLD OUT</span>' : '') + '</div>';
+    html += '<div class="bv">' + d.b + '<span> bol.</span></div>';
+    html += '<div class="bi">$' + d.i.toLocaleString() + '</div></div>';
+  });
+  html += '</div></div>';
+
+  html += '<div><div class="st">Por zona</div><div class="bg3">';
+  Object.keys(ZONES).forEach(function(id) {
+    var z = ZONES[id], d = m.byZone[id] || { b:0, i:0 };
+    html += '<div class="bc" style="border-color:' + z.color + '33">';
+    html += '<div class="bl" style="color:' + z.color + '">' + z.label + '</div>';
+    html += '<div class="bv">' + d.b + '<span> bol.</span></div>';
+    html += '<div class="bi">$' + d.i.toLocaleString() + '</div></div>';
+  });
+  html += '</div></div></div>';
+
+  html += '<div class="filters">';
+  html += '<input class="fs" id="f-search" placeholder="Buscar nombre, email o ID..." value="' + filter.search + '">';
+  html += '<select class="fsel" id="f-show"><option value="all">Todas las funciones</option>';
+  Object.keys(SHOWS).forEach(function(id) {
+    html += '<option value="' + id + '"' + (filter.show === id ? ' selected' : '') + '>' + SHOWS[id] + '</option>';
+  });
+  html += '</select>';
+  html += '<select class="fsel" id="f-zone"><option value="all">Todas las zonas</option>';
+  Object.keys(ZONES).forEach(function(id) {
+    html += '<option value="' + id + '"' + (filter.zone === id ? ' selected' : '') + '>' + ZONES[id].label + '</option>';
+  });
+  html += '</select>';
+  html += '<select class="fsel" id="f-status"><option value="all">Todos</option>';
+  html += '<option value="paid"' + (filter.status === "paid" ? ' selected' : '') + '>Pagado</option>';
+  html += '<option value="pending"' + (filter.status === "pending" ? ' selected' : '') + '>Pendiente</option>';
+  html += '</select>';
+  html += '<button class="bexp" onclick="window._export()">CSV</button>';
+  html += '<button class="bref" onclick="window._reload()">Actualizar</button>';
+  html += '</div>';
+
+  html += '<div class="tscroll"><div class="twrap">';
+  html += '<div class="thead"><div>ID</div><div>Comprador</div><div>Funcion</div><div>Zona</div><div>Bol.</div><div>Total</div><div>Estado</div><div>Descuento</div></div>';
+
+  if (rows.length === 0) {
+    html += '<div class="empty">' + (orders.length === 0 ? "Sin ordenes registradas aun" : "Sin resultados") + '</div>';
+  } else {
+    rows.forEach(function(o) {
+      var b  = o.buyer || {};
+      var z  = ZONES[o.zone] || {};
+      var ok = o.status === "paid" || o.status === "approved";
+      html += '<div class="trow' + (ok ? '' : ' pending') + '">';
+      html += '<div class="td"><span class="oid">' + o.id + '</span></div>';
+      html += '<div class="td"><div class="bn">' + (b.name||"—") + '</div><div class="bs">' + (b.email||"—") + '</div><div class="bs">' + (b.phone||"—") + '</div></div>';
+      html += '<div class="td">' + (SHOWS[o.show]||o.show||"—") + '</div>';
+      html += '<div class="td"><span class="zb" style="color:' + (z.color||"#fff") + ';border-color:' + (z.color||"#fff") + '44">' + (z.label||o.zone||"—") + '</span></div>';
+      html += '<div class="td qty">' + (o.qty||1) + '</div>';
+      html += '<div class="td amt">$' + (o.total||0).toLocaleString() + '</div>';
+      html += '<div class="td"><span class="stb ' + (ok ? 'paid' : 'pend') + '">' + (ok ? 'Pagado' : 'Pendiente') + '</span></div>';
+      html += '<div class="td">' + (o.discount ? '<span class="disc">' + o.discount.code + ' -' + o.discount.pct + '%</span>' : '<span class="none">-</span>') + '</div>';
+      html += '</div>';
+    });
+  }
+  html += '</div></div>';
+  html += '<div class="tfooter">' + rows.length + ' de ' + orders.length + ' ordenes · ' + m.paid + ' pagadas · ' + m.pending + ' pendientes</div>';
+  return html;
+}
+
+function bindEvents() {
+  var fs = document.getElementById("f-search");
+  var fw = document.getElementById("f-show");
+  var fz = document.getElementById("f-zone");
+  var ft = document.getElementById("f-status");
+  if (fs) fs.addEventListener("input",  function(e) { filter.search = e.target.value; render(); });
+  if (fw) fw.addEventListener("change", function(e) { filter.show   = e.target.value; render(); });
+  if (fz) fz.addEventListener("change", function(e) { filter.zone   = e.target.value; render(); });
+  if (ft) ft.addEventListener("change", function(e) { filter.status = e.target.value; render(); });
+}
+
+window._reload = function() { orders = []; loadData(); };
+window._export = exportCSV;
+
+loadData();
+</script>
+</body>
+</html>
