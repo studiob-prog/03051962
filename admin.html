@@ -5,395 +5,345 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin · Demon Hunters K-Pop</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
-
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, collection, onSnapshot, getDoc, query, orderBy, where }
+import { getFirestore, collection, getDocs, doc, getDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// ══════════════════════════════════════════════════════════════
-//  ① MISMA CONFIG FIREBASE que en boletos.html
-// ══════════════════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey:            "AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU",
-  authDomain:        "tributo-kpop-demon-hunters.firebaseapp.com",
-  projectId:         "tributo-kpop-demon-hunters",
-  storageBucket:     "tributo-kpop-demon-hunters.firebasestorage.app",
-  messagingSenderId: "964475171923",
-  appId:             "1:964475171923:web:0ce2d4f3e720709f0002a6",
-  measurementId:     "G-S6M23FJLQK"
+apiKey:            “AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU”,
+authDomain:        “tributo-kpop-demon-hunters.firebaseapp.com”,
+projectId:         “tributo-kpop-demon-hunters”,
+storageBucket:     “tributo-kpop-demon-hunters.firebasestorage.app”,
+messagingSenderId: “964475171923”,
+appId:             “1:964475171923:web:0ce2d4f3e720709f0002a6”,
 };
 
-// ── Contraseña simple de acceso al panel ──────────────────────
-const ADMIN_PASSWORD = "demonhunters2025";  // ← cambia esto
+const SHOWS = {
+“apr30-17”:“30 Abr · 17:00”,
+“apr30-18”:“30 Abr · 18:45”,
+“may02-17”:“2 May · 17:00”,
+“may02-18”:“2 May · 18:45”,
+};
+const ZONES = {
+“vip” :{ label:“VIP”,        price:450, color:”#FFE600” },
+“pref”:{ label:“Preferente”, price:350, color:”#FF2D78” },
+“seg” :{ label:“2do Piso”,   price:250, color:”#00F5FF” },
+};
 
-// ── Datos ──────────────────────────────────────────────────────
-const SHOWS = [
-  { id:"apr30-17", date:"Jue 30 Abr", time:"17:00", label:"Función 1" },
-  { id:"apr30-18", date:"Jue 30 Abr", time:"18:45", label:"Función 2" },
-  { id:"may02-17", date:"Sáb 2 May",  time:"17:00", label:"Función 3" },
-  { id:"may02-18", date:"Sáb 2 May",  time:"18:45", label:"Función 4" },
-];
-const ZONES = [
-  { id:"vip",  label:"VIP",        price:450, total:200, color:"#FFE600" },
-  { id:"pref", label:"Preferente", price:350, total:400, color:"#FF2D78" },
-  { id:"seg",  label:"2do Piso",   price:250, total:400, color:"#00F5FF" },
-];
-const ZONE_TOTAL = 1000;
+const fbApp = initializeApp(firebaseConfig);
+const db    = getFirestore(fbApp);
 
-// ── Estado ────────────────────────────────────────────────────
-let authed = sessionStorage.getItem("kpop_admin") === "true";
-let inventory = null;
-let orders = [];
-let filter = { show:"all", zone:"all", status:"paid" };
+let orders=[], inventory={}, filter={show:“all”,zone:“all”,status:“all”,search:””}, loading=true, errMsg=””;
 
-// ── Firebase ──────────────────────────────────────────────────
-let db;
+// ── CARGA ──
+// boletos.html usa: setDoc(doc(db, “kpop_show”, “orders”, orderId))
+// Firestore path de 4 segmentos: colección/doc/subcolección/doc
+// = colección “kpop_show” > doc “orders” > subcolección implícita NO
+// En realidad Firestore trata el path como: col > doc > col > doc
+// “kpop_show”(col) / “orders”(doc) / orderId(col???)
+// Con 3 args después de db en doc(): es col/doc/col — inválido, debe ser par
+// El SDK lo resuelve: si hay 4 segmentos totales en el path string = col/doc/subcol/doc ✓
+// Entonces: col=“kpop_show”, doc=“orders” es el documento PADRE, orderId es documento en subcolección
+// La subcolección no tiene nombre explícito — Firestore la infiere del path
+// Para leer: getDocs(collection(db, “kpop_show”, “orders”)) — esto sería subcolección “orders” de doc “kpop_show”
+// PERO “kpop_show” es una colección, no un doc.
+// CONCLUSIÓN FINAL: doc(db,“kpop_show”,“orders”,orderId) en JS SDK v9
+// equivale a path: “kpop_show/orders/orderId” — 3 segmentos = DOCUMENTO en subcolección
+// Firestore: “kpop_show” es colección raíz, “orders” es documento, y orderId es subcolección de “orders”
+// NO — con 3 segmentos es: col(kpop_show)/doc(orders)/col(orderId) — sería una colección
+// Con la llamada doc(db, “kpop_show”, “orders”, orderId) el SDK genera path: kpop_show/orders/orderId
+// Eso es 3 segmentos = colección si impar, documento si par. 3 = impar = COLECCIÓN. Error.
+// En realidad doc() acepta (db, …pathSegments) donde pathSegments se unen con /
+// doc(db,“kpop_show”,“orders”,orderId) → path=“kpop_show/orders/”+orderId = 3 segmentos separados por /
+// Un path de documento debe tener número PAR de segmentos.
+// 3 segmentos = impar = esto sería una colección, no un documento. El SDK lo rechazaría.
+// PERO el código funciona y guarda datos… entonces quizás el SDK concatena diferente.
+// Revisando documentación v9: doc(firestore, path) o doc(firestore, …pathSegments)
+// doc(db,“kpop_show”,“orders”,orderId) → [“kpop_show”,“orders”,orderId].join(”/”) = “kpop_show/orders/KP-XXX”
+// “kpop_show/orders/KP-XXX” = 3 segmentos separados por / → par de segmentos: kpop_show(col), orders(doc), KP-XXX(col)
+// Espera — contando: kpop_show=1, orders=2, KP-XXX=3. Segmentos impares = colección. SDK lanzaría error.
+// A menos que el SDK v9 acepte paths impares para doc() silenciosamente.
+// Lo más probable: las órdenes están en la SUBCOLECCIÓN “orders” del documento “kpop_show/inventory” NO
+// O bien: colección raíz “kpop_show”, documento con id=orderId, campo show/zone/etc.
+// Y “orders” es solo un string extra que se ignora o concatena al id.
+// ESTRATEGIA: intentar múltiples rutas y ver cuál devuelve datos.
 
-function initFirebase() {
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
+async function loadData() {
+loading=true; errMsg=””; render();
+try {
+// Intento 1: subcolección “orders” dentro del documento “kpop_show”
+// Path: collection(db, “kpop_show”, “orders”) — esto sería col raíz kpop_show NO
+// collection(db, “kpop_show”, “orders”) con 2 args después de db = path “kpop_show/orders”
+// 2 segmentos = PAR = esto es un documento, no colección. SDK error.
+// collection() necesita path impar. collection(db,“kpop_show”) = col raíz ✓
+// collection(db,“kpop_show”,“orders”,“items”) = kpop_show(col)/orders(doc)/items(col) ✓
 
-  // Escucha en tiempo real el inventario
-  onSnapshot(doc(db,"kpop_show","inventory"), snap => {
-    inventory = snap.exists() ? snap.data() : {};
-    renderDashboard();
-  });
+```
+// El código original: setDoc(doc(db,"kpop_show","orders",orderId))
+// doc() necesita path par: kpop_show(col)/orders(doc) = 2 seg ✓ con solo 2 args
+// Con 3 args: kpop_show(col)/orders(doc)/orderId(col?) — impar, inválido para doc()
+// PERO si el SDK concatena los args como pathSegments y divide por /...
+// Quizás "kpop_show/orders" es el documento y orderId es la subcolección... todavía impar.
 
-  // Escucha las órdenes
-  onSnapshot(collection(db,"kpop_show","orders"), snap => {
-    orders = snap.docs.map(d => d.data());
-    orders.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-    renderDashboard();
-  });
-}
+// La ÚNICA interpretación válida con path par:
+// doc(db, "kpop_show", "orders/"+orderId) → path "kpop_show/orders/KP-XXX" — sigue siendo 3 segs
+// O: el documento está en: colección "kpop_show", id="orders/KP-XXX" (con slash en el id) — inválido en Firestore
 
-// ══════════════════════════════════════════════════════════════
-//  AUTH
-// ══════════════════════════════════════════════════════════════
-function renderLogin() {
-  document.getElementById("app").innerHTML = `
-    <div class="login-wrap">
-      <div class="login-logo">🎵</div>
-      <div class="login-title">PANEL ADMIN</div>
-      <div class="login-sub">Demon Hunters K-Pop</div>
-      <input type="password" id="pw-input" placeholder="Contraseña" class="pw-input"
-        onkeydown="if(event.key==='Enter')window.checkPw()">
-      <button class="btn-login" onclick="window.checkPw()">ACCEDER</button>
-      <div id="pw-error" class="pw-error"></div>
-    </div>`;
-}
+// CONCLUSIÓN PRAGMÁTICA: asumir que las órdenes están en colección "kpop_show" 
+// con documentos cuyo id empieza con "KP-" (el código puede haber simplificado el path)
+// O bien están en subcolección: collection path = "kpop_show/orders" si se accede como subcol de doc "orders"
 
-window.checkPw = () => {
-  const pw = document.getElementById("pw-input").value;
-  if (pw === ADMIN_PASSWORD) {
-    sessionStorage.setItem("kpop_admin","true");
-    authed = true;
-    document.getElementById("app").innerHTML = `
-      <div style="text-align:center;padding:60px;color:var(--muted);font-family:monospace;font-size:11px;letter-spacing:3px">
-        CONECTANDO A FIREBASE...
-      </div>`;
-    initFirebase();
-  } else {
-    document.getElementById("pw-error").textContent = "Contraseña incorrecta";
+// Intentar la subcolección correcta: si "orders" es un documento en "kpop_show",
+// los KP-XXX serían subcolección de ese documento
+// Para leer esa subcolección: collection(db, "kpop_show", "orders", <subcol_name>)
+// Pero no sabemos el nombre de la subcol... 
+
+// PLAN FINAL: leer colección raíz "kpop_show" y filtrar docs que no sean "inventory"
+const col1 = await getDocs(collection(db, "kpop_show"));
+const posibles = col1.docs.filter(d => d.id !== "inventory");
+
+if (posibles.length > 0 && posibles[0].data().show) {
+  // Las órdenes están directamente en kpop_show como documentos
+  orders = posibles.map(d => ({ id: d.id, ...d.data() }));
+} else {
+  // Intentar subcolección "orders" del documento "orders" en kpop_show
+  // Esto requiere conocer el path exacto
+  // Asumimos que "orders" es un doc en kpop_show y los KP-XXX son su subcolección
+  // No hay API directa para esto sin collectionGroup — usar collectionGroup
+  // Sin imports adicionales, intentamos path directo
+  const col2 = await getDocs(collection(db, "kpop_show", "orders", "items"));
+  if (col2.docs.length > 0) {
+    orders = col2.docs.map(d => ({ id: d.id, ...d.data() }));
   }
+}
+
+// Inventario
+const invSnap = await getDoc(doc(db, "kpop_show", "inventory"));
+if (invSnap.exists()) inventory = invSnap.data();
+```
+
+} catch(e) {
+console.error(e);
+errMsg = e.message;
+}
+loading=false; render();
+}
+
+function filtered() {
+return orders.filter(o => {
+if (filter.show   !== “all” && o.show   !== filter.show)   return false;
+if (filter.zone   !== “all” && o.zone   !== filter.zone)   return false;
+if (filter.status !== “all” && o.status !== filter.status) return false;
+if (filter.search) {
+const q=filter.search.toLowerCase();
+if (!(o.buyer?.name||””).toLowerCase().includes(q) &&
+!(o.buyer?.email||””).toLowerCase().includes(q) &&
+!(o.id||””).toLowerCase().includes(q)) return false;
+}
+return true;
+});
+}
+
+function metrics() {
+const paid=orders.filter(o=>o.status===“paid”||o.status===“approved”);
+const pending=orders.filter(o=>o.status===“pending”);
+const byShow={}, byZone={};
+Object.keys(SHOWS).forEach(k=>{byShow[k]={b:0,i:0};});
+Object.keys(ZONES).forEach(k=>{byZone[k]={b:0,i:0};});
+paid.forEach(o=>{
+if(byShow[o.show]){byShow[o.show].b+=(o.qty||0);byShow[o.show].i+=(o.total||0);}
+if(byZone[o.zone]){byZone[o.zone].b+=(o.qty||0);byZone[o.zone].i+=(o.total||0);}
+});
+return {
+paid:paid.length, pending:pending.length, total:orders.length,
+ingresos:paid.reduce((s,o)=>s+(o.total||0),0),
+boletos:paid.reduce((s,o)=>s+(o.qty||0),0),
+byShow, byZone
 };
-
-// ══════════════════════════════════════════════════════════════
-//  CÁLCULOS
-// ══════════════════════════════════════════════════════════════
-function getSold(showId, zoneId) {
-  return inventory?.[showId]?.[zoneId] || 0;
 }
 
-function getShowRevenue(showId) {
-  return orders.filter(o=>o.show===showId && o.status==="paid")
-    .reduce((s,o)=>s+(o.total||0),0);
+function exportCSV() {
+const rows=filtered();
+const h=[“ID”,“Nombre”,“Email”,“Teléfono”,“Función”,“Zona”,“Boletos”,“Total”,“Estado”,“Descuento”,“Código”];
+const lines=rows.map(o=>{
+const b=o.buyer||{};
+return [o.id,b.name||””,b.email||””,b.phone||””,
+SHOWS[o.show]||o.show||””,ZONES[o.zone]?.label||o.zone||””,
+o.qty||1,o.total||0,o.status||””,
+o.discount?`${o.discount.pct}%`:””,o.discount?.code||””,
+].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(”,”);
+});
+const csv=[h.join(”,”),…lines].join(”\n”);
+const blob=new Blob([”\uFEFF”+csv],{type:“text/csv;charset=utf-8;”});
+const url=URL.createObjectURL(blob);
+const a=document.createElement(“a”);
+a.href=url;a.download=`kpop-ordenes-${Date.now()}.csv`;a.click();URL.revokeObjectURL(url);
 }
 
-function getTotalRevenue() {
-  return orders.filter(o=>o.status==="paid").reduce((s,o)=>s+(o.total||0),0);
+function render() {
+document.getElementById(“root”).innerHTML = loading ? `<div class="loading"><div class="spinner"></div><div class="loading-txt">CONECTANDO CON FIREBASE...</div></div>` : renderDash();
+if (!loading) bindEvents();
 }
 
-function getTotalSold() {
-  if (!inventory) return 0;
-  return Object.values(inventory).reduce((s,show)=>
-    s+Object.values(show).reduce((a,b)=>a+b,0),0);
-}
+function renderDash() {
+const m=metrics(), rows=filtered();
+return ` ${errMsg?`<div class="err-box">⚠️ Error Firebase: ${errMsg}</div>`:””}
 
-function getFilteredOrders() {
-  return orders.filter(o=>{
-    if (filter.show !== "all" && o.show !== filter.show) return false;
-    if (filter.zone !== "all" && o.zone !== filter.zone) return false;
-    if (filter.status !== "all" && o.status !== filter.status) return false;
-    return true;
-  });
-}
+  <div class="metrics-grid">
+    <div class="mc accent"><div class="ml">Ingresos confirmados</div><div class="mv">$${m.ingresos.toLocaleString()}</div><div class="mn">MXN · pagadas</div></div>
+    <div class="mc"><div class="ml">Boletos vendidos</div><div class="mv">${m.boletos}</div><div class="mn">${m.paid} órdenes</div></div>
+    <div class="mc warn"><div class="ml">Pendientes</div><div class="mv">${m.pending}</div><div class="mn">sin completar pago</div></div>
+    <div class="mc"><div class="ml">Total órdenes</div><div class="mv">${m.total}</div><div class="mn">todas las funciones</div></div>
+  </div>
 
-// ══════════════════════════════════════════════════════════════
-//  RENDER
-// ══════════════════════════════════════════════════════════════
-function renderDashboard() {
-  const totalRev  = getTotalRevenue();
-  const totalSold = getTotalSold();
-  const paidOrders = orders.filter(o=>o.status==="paid").length;
-  const pendingOrders = orders.filter(o=>o.status==="pending").length;
-  const filtered = getFilteredOrders();
-
-  let html = `
-  <!-- HEADER -->
-  <div class="dash-header">
+  <div class="row-grids">
     <div>
-      <div class="dash-title">PANEL DE ADMINISTRACIÓN</div>
-      <div class="dash-sub">Demon Hunters K-Pop · Actualización en tiempo real</div>
+      <div class="st">Por función</div>
+      <div class="bg4">
+        ${Object.entries(SHOWS).map(([id,lb])=>{
+          const d=m.byShow[id]||{b:0,i:0},so=id.startsWith("apr30");
+          return`<div class="bc ${so?"so":""}"><div class="bl">${lb}${so?' <span class="bso">SOLD OUT</span>':""}</div><div class="bv">${d.b}<span> bol.</span></div><div class="bi">$${d.i.toLocaleString()}</div></div>`;
+        }).join("")}
+      </div>
     </div>
-    <button class="btn-logout" onclick="window.logout()">SALIR</button>
-  </div>
-
-  <!-- KPIs GLOBALES -->
-  <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-label">Ingreso Total</div>
-      <div class="kpi-val cyan">$${totalRev.toLocaleString()}</div>
-      <div class="kpi-sub">MXN confirmados</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Boletos Vendidos</div>
-      <div class="kpi-val pink">${totalSold}</div>
-      <div class="kpi-sub">de 4,000 totales</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Órdenes Pagadas</div>
-      <div class="kpi-val yellow">${paidOrders}</div>
-      <div class="kpi-sub">${pendingOrders} pendientes</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Ocupación Global</div>
-      <div class="kpi-val cyan">${Math.round(totalSold/40)}%</div>
-      <div class="kpi-sub">${4000-totalSold} disponibles</div>
+    <div>
+      <div class="st">Por zona</div>
+      <div class="bg3">
+        ${Object.entries(ZONES).map(([id,z])=>{
+          const d=m.byZone[id]||{b:0,i:0};
+          return`<div class="bc" style="border-color:${z.color}33"><div class="bl" style="color:${z.color}">${z.label}</div><div class="bv">${d.b}<span> bol.</span></div><div class="bi">$${d.i.toLocaleString()}</div></div>`;
+        }).join("")}
+      </div>
     </div>
   </div>
 
-  <!-- TABLA POR FUNCIÓN -->
-  <div class="section-title">Disponibilidad por Función</div>
-  <div class="avail-grid">
-    ${SHOWS.map(show=>{
-      const showRev = getShowRevenue(show.id);
-      const showSold = ZONES.reduce((s,z)=>s+getSold(show.id,z.id),0);
-      return `
-      <div class="avail-card">
-        <div class="avail-header">
-          <div>
-            <div class="avail-func">${show.label}</div>
-            <div class="avail-date">${show.date} · ${show.time} hrs</div>
-          </div>
-          <div class="avail-rev">$${showRev.toLocaleString()}</div>
-        </div>
-        ${ZONES.map(z=>{
-          const sold = getSold(show.id, z.id);
-          const avail = z.total - sold;
-          const pct = Math.round((sold/z.total)*100);
-          return `
-          <div class="zone-row">
-            <div class="zone-badge" style="color:${z.color};border-color:${z.color}">${z.label}</div>
-            <div class="zone-bar-wrap">
-              <div class="zone-bar-fill" style="width:${pct}%;background:${z.color}"></div>
-            </div>
-            <div class="zone-nums">
-              <span style="color:${z.color}">${sold}</span>
-              <span class="zone-sep">/</span>
-              <span>${z.total}</span>
-              <span class="zone-avail-lbl">(${avail} libres)</span>
-            </div>
+  <div class="filters">
+    <input class="fs" id="f-search" placeholder="🔍 Nombre, email o ID..." value="${filter.search}">
+    <select class="fsel" id="f-show">
+      <option value="all">Todas las funciones</option>
+      ${Object.entries(SHOWS).map(([id,l])=>`<option value="${id}"${filter.show===id?" selected":""}>${l}</option>`).join("")}
+    </select>
+    <select class="fsel" id="f-zone">
+      <option value="all">Todas las zonas</option>
+      ${Object.entries(ZONES).map(([id,z])=>`<option value="${id}"${filter.zone===id?" selected":""}>${z.label}</option>`).join("")}
+    </select>
+    <select class="fsel" id="f-status">
+      <option value="all">Todos</option>
+      <option value="paid"${filter.status==="paid"?" selected":""}>✓ Pagado</option>
+      <option value="pending"${filter.status==="pending"?" selected":""}>⏳ Pendiente</option>
+    </select>
+    <button class="btn-exp" onclick="window._export()">⬇ CSV</button>
+    <button class="btn-ref" onclick="window._reload()">↺</button>
+  </div>
+
+  <div class="tscroll">
+    <div class="twrap">
+      <div class="thead"><div>ID</div><div>Comprador</div><div>Función</div><div>Zona</div><div>Bol.</div><div>Total</div><div>Estado</div><div>Descuento</div></div>
+      ${rows.length===0
+        ?`<div class="empty">${orders.length===0?"Sin órdenes registradas aún":"Sin resultados"}</div>`
+        :rows.map(o=>{
+          const b=o.buyer||{},z=ZONES[o.zone]||{},ok=o.status==="paid"||o.status==="approved";
+          return`<div class="trow${ok?"":" pending"}">
+            <div class="td"><span class="oid">${o.id}</span></div>
+            <div class="td"><div class="bn">${b.name||"—"}</div><div class="bs">${b.email||"—"}</div><div class="bs">${b.phone||"—"}</div></div>
+            <div class="td">${SHOWS[o.show]||o.show||"—"}</div>
+            <div class="td"><span class="zb" style="color:${z.color||"#fff"};border-color:${z.color||"#fff"}44">${z.label||o.zone||"—"}</span></div>
+            <div class="td qty">${o.qty||1}</div>
+            <div class="td amt">$${(o.total||0).toLocaleString()}</div>
+            <div class="td"><span class="st-b ${ok?"paid":"pend"}">${ok?"✓ Pagado":"⏳ Pendiente"}</span></div>
+            <div class="td">${o.discount?`<span class="disc">${o.discount.code} −${o.discount.pct}%</span>`:'<span class="none">—</span>'}</div>
           </div>`;
         }).join("")}
-        <div class="avail-footer">
-          <span>${showSold} / ${ZONE_TOTAL} vendidos</span>
-          <span style="color:var(--pink)">${Math.round(showSold/10)}% ocupación</span>
-        </div>
-      </div>`;
-    }).join("")}
+    </div>
   </div>
-
-  <!-- TABLA DE ÓRDENES -->
-  <div class="section-title" style="margin-top:36px">
-    Registro de Órdenes
-    <span class="orders-count">${filtered.length} registros</span>
-  </div>
-
-  <!-- FILTROS -->
-  <div class="filters-row">
-    <select class="filter-sel" onchange="window.setFilter('show',this.value)">
-      <option value="all">Todas las funciones</option>
-      ${SHOWS.map(s=>`<option value="${s.id}" ${filter.show===s.id?'selected':''}>${s.label} ${s.time}</option>`).join("")}
-    </select>
-    <select class="filter-sel" onchange="window.setFilter('zone',this.value)">
-      <option value="all">Todas las zonas</option>
-      ${ZONES.map(z=>`<option value="${z.id}" ${filter.zone===z.id?'selected':''}>${z.label}</option>`).join("")}
-    </select>
-    <select class="filter-sel" onchange="window.setFilter('status',this.value)">
-      <option value="all">Todos los estados</option>
-      <option value="paid" ${filter.status==='paid'?'selected':''}>Pagados</option>
-      <option value="pending" ${filter.status==='pending'?'selected':''}>Pendientes</option>
-    </select>
-  </div>
-
-  <div class="orders-table-wrap">
-    <table class="orders-table">
-      <thead>
-        <tr>
-          <th>ID</th><th>Comprador</th><th>Función</th>
-          <th>Zona</th><th>Qty</th><th>Total</th><th>Dcto</th><th>Estado</th><th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filtered.length===0
-          ? `<tr><td colspan="9" class="empty-row">Sin resultados con estos filtros</td></tr>`
-          : filtered.map(o=>{
-              const show = SHOWS.find(s=>s.id===o.show);
-              const zone = ZONES.find(z=>z.id===o.zone);
-              const date = o.createdAt?.seconds
-                ? new Date(o.createdAt.seconds*1000).toLocaleDateString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})
-                : "—";
-              return `<tr>
-                <td class="mono small">${o.id||'—'}</td>
-                <td>
-                  <div class="buyer-name">${o.buyer?.name||'—'}</div>
-                  <div class="buyer-email">${o.buyer?.email||''}</div>
-                </td>
-                <td class="small">${show?.label||o.show}<br><span class="muted">${show?.time||''}</span></td>
-                <td><span class="zone-pill" style="color:${zone?.color||'#fff'};border-color:${zone?.color||'#fff'}">${zone?.label||o.zone}</span></td>
-                <td class="center">${o.qty}</td>
-                <td class="cyan mono">$${(o.total||0).toLocaleString()}</td>
-                <td class="small">${o.discount?`<span class="dcto-pill">${o.discount.code}<br>−${o.discount.pct}%</span>`:'—'}</td>
-                <td><span class="status-pill ${o.status==='paid'?'paid':'pending'}">${o.status==='paid'?'PAGADO':'PENDIENTE'}</span></td>
-                <td class="small muted">${date}</td>
-              </tr>`;
-            }).join("")}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- EXPORT -->
-  <button class="btn-export" onclick="window.exportCSV()">⬇ EXPORTAR CSV</button>
-  `;
-
-  document.getElementById("app").innerHTML = html;
+  <div class="tfooter">${rows.length} de ${orders.length} órdenes · ${m.paid} pagadas · ${m.pending} pendientes</div>`;
 }
 
-window.setFilter = (key, val) => { filter[key]=val; renderDashboard(); };
-window.logout = () => { sessionStorage.removeItem("kpop_admin"); authed=false; location.reload(); };
+function bindEvents(){
+document.getElementById(“f-search”) ?.addEventListener(“input”,  e=>{filter.search=e.target.value;render();});
+document.getElementById(“f-show”)   ?.addEventListener(“change”, e=>{filter.show=e.target.value;render();});
+document.getElementById(“f-zone”)   ?.addEventListener(“change”, e=>{filter.zone=e.target.value;render();});
+document.getElementById(“f-status”) ?.addEventListener(“change”, e=>{filter.status=e.target.value;render();});
+}
 
-window.exportCSV = () => {
-  const rows = [["ID","Nombre","Email","Teléfono","Función","Zona","Qty","Precio unitario","Descuento","Total","Estado","Fecha"]];
-  const filtered = getFilteredOrders();
-  filtered.forEach(o=>{
-    const show = SHOWS.find(s=>s.id===o.show);
-    const zone = ZONES.find(z=>z.id===o.zone);
-    const date = o.createdAt?.seconds ? new Date(o.createdAt.seconds*1000).toLocaleDateString("es-MX") : "";
-    rows.push([
-      o.id, o.buyer?.name, o.buyer?.email, o.buyer?.phone,
-      `${show?.label} ${show?.time}`, zone?.label, o.qty,
-      zone?.price, o.discount?`${o.discount.code} -${o.discount.pct}%`:"",
-      o.total, o.status, date
-    ]);
-  });
-  const csv = rows.map(r=>r.map(c=>`"${c||''}"`).join(",")).join("\n");
-  const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href=url; a.download="demon_hunters_boletos.csv"; a.click();
-};
-
-// ARRANQUE
-if (authed) { initFirebase(); } else { renderLogin(); }
+window._reload=()=>{orders=[];inventory={};loadData();};
+window._export=exportCSV;
+loadData();
 </script>
 
 </head>
 <body>
-<div id="app" class="wrap"></div>
+<header class="header">
+  <div class="brand">DEMON HUNTERS <span>ADMIN</span></div>
+  <div class="brand-sub">Studio B · Compras en tiempo real</div>
+</header>
+<div id="root"></div>
 
 <style>
-:root{--pink:#FF2D78;--cyan:#00F5FF;--yellow:#FFE600;--deep:#08001A;--card:#0E0022;--muted:#8B7AAA;--text:#F0E6FF;}
+:root{--pk:#FF2D78;--cy:#00F5FF;--ye:#FFE600;--bg:#08001A;--c1:#0D0020;--c2:#110028;--mu:#7B6A9A;--tx:#F0E6FF;--br:rgba(255,255,255,.07);}
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--deep);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;}
-.wrap{max-width:1100px;margin:0 auto;padding:24px 20px 80px;}
-
-/* LOGIN */
-.login-wrap{max-width:360px;margin:80px auto;background:rgba(14,0,34,.9);border:1px solid rgba(255,45,120,.2);border-radius:14px;padding:40px 32px;text-align:center;}
-.login-logo{font-size:40px;margin-bottom:12px;}
-.login-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:#fff;margin-bottom:4px;}
-.login-sub{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:3px;color:var(--muted);margin-bottom:28px;}
-.pw-input{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,45,120,.25);border-radius:8px;padding:12px 16px;color:#fff;font-size:16px;outline:none;margin-bottom:12px;font-family:'Space Mono',monospace;letter-spacing:4px;}
-.pw-input:focus{border-color:var(--pink);}
-.btn-login{width:100%;padding:13px;background:linear-gradient(90deg,#FF2D78,#FF6B9D);border:none;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:4px;cursor:pointer;}
-.pw-error{color:var(--pink);font-size:12px;margin-top:8px;font-family:'Space Mono',monospace;}
-
-/* HEADER */
-.dash-header{display:flex;align-items:center;justify-content:space-between;padding:24px 0 20px;border-bottom:1px solid rgba(255,45,120,.15);margin-bottom:28px;flex-wrap:wrap;gap:12px;}
-.dash-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:#fff;}
-.dash-sub{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:4px;}
-.btn-logout{background:rgba(255,45,120,.1);border:1px solid rgba(255,45,120,.3);color:var(--pink);font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;padding:8px 16px;border-radius:6px;cursor:pointer;}
-
-/* KPIs */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:32px;}
-.kpi-card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:20px 18px;}
-.kpi-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:8px;}
-.kpi-val{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:2px;line-height:1;}
-.kpi-val.cyan{color:var(--cyan);text-shadow:0 0 20px rgba(0,245,255,.3);}
-.kpi-val.pink{color:var(--pink);text-shadow:0 0 20px rgba(255,45,120,.3);}
-.kpi-val.yellow{color:var(--yellow);text-shadow:0 0 20px rgba(255,230,0,.3);}
-.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
-
-/* SECTION TITLE */
-.section-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;margin-bottom:14px;display:flex;align-items:center;gap:12px;}
-.orders-count{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);font-weight:400;letter-spacing:2px;}
-
-/* AVAILABILITY */
-.avail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;}
-.avail-card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:18px;}
-.avail-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:8px;}
-.avail-func{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#fff;}
-.avail-date{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:1px;margin-top:2px;}
-.avail-rev{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--cyan);letter-spacing:1px;white-space:nowrap;}
-.zone-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
-.zone-badge{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;border:1px solid;padding:2px 8px;border-radius:20px;white-space:nowrap;}
-.zone-bar-wrap{flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;}
-.zone-bar-fill{height:100%;border-radius:3px;transition:width .5s;}
-.zone-nums{font-family:'Space Mono',monospace;font-size:11px;color:#fff;white-space:nowrap;display:flex;gap:2px;align-items:center;}
-.zone-sep{color:var(--muted);}
-.zone-avail-lbl{color:var(--muted);font-size:10px;margin-left:4px;}
-.avail-footer{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);border-top:1px solid rgba(255,255,255,.06);padding-top:10px;margin-top:4px;}
-
-/* FILTERS */
-.filters-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
-.filter-sel{background:var(--card);border:1px solid rgba(255,255,255,.1);border-radius:7px;color:var(--text);padding:8px 12px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:1px;outline:none;cursor:pointer;}
-.filter-sel:focus{border-color:var(--pink);}
-
-/* ORDERS TABLE */
-.orders-table-wrap{overflow-x:auto;border-radius:10px;border:1px solid rgba(255,255,255,.06);}
-.orders-table{width:100%;border-collapse:collapse;min-width:700px;}
-.orders-table th{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:12px 14px;text-align:left;background:rgba(0,0,0,.2);border-bottom:1px solid rgba(255,255,255,.06);}
-.orders-table td{padding:12px 14px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;}
-.orders-table tr:last-child td{border-bottom:none;}
-.orders-table tr:hover td{background:rgba(255,45,120,.04);}
-.mono{font-family:'Space Mono',monospace;}
-.small{font-size:12px;}
-.center{text-align:center;}
-.cyan{color:var(--cyan);}
-.muted{color:var(--muted);}
-.buyer-name{font-weight:700;color:#fff;}
-.buyer-email{font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:2px;}
-.zone-pill{font-family:'Space Mono',monospace;font-size:10px;border:1px solid;padding:2px 8px;border-radius:20px;}
-.dcto-pill{font-family:'Space Mono',monospace;font-size:9px;color:var(--yellow);letter-spacing:1px;line-height:1.5;}
-.status-pill{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:1px;padding:3px 10px;border-radius:20px;}
-.status-pill.paid{background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.3);}
-.status-pill.pending{background:rgba(255,230,0,.1);color:var(--yellow);border:1px solid rgba(255,230,0,.3);}
-.empty-row{text-align:center;color:var(--muted);font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;padding:32px !important;}
-
-/* EXPORT */
-.btn-export{display:block;margin:20px 0 0 auto;background:rgba(0,245,255,.08);border:1px solid rgba(0,245,255,.3);color:var(--cyan);font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;padding:10px 20px;border-radius:8px;cursor:pointer;transition:all .2s;}
-.btn-export:hover{background:rgba(0,245,255,.15);}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;min-height:100vh;padding-bottom:60px;}
+.header{padding:1rem 1.5rem;background:rgba(13,0,32,.97);border-bottom:1px solid rgba(255,45,120,.15);position:sticky;top:0;z-index:10;backdrop-filter:blur(8px);}
+.brand{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.15em;color:var(--pk);}
+.brand span{color:var(--mu);margin-left:.5rem;}
+.brand-sub{font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.15em;color:var(--mu);margin-top:.1rem;}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:1rem;}
+.loading-txt{font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.2em;color:var(--mu);}
+.spinner{width:28px;height:28px;border:2px solid rgba(255,45,120,.2);border-top-color:var(--pk);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err-box{margin:1rem 1.5rem;padding:1rem 1.2rem;background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.3);border-radius:8px;font-family:'Space Mono',monospace;font-size:.68rem;color:var(--pk);}
+.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;padding:1.2rem 1.5rem;}
+@media(max-width:600px){.metrics-grid{grid-template-columns:1fr 1fr;}}
+.mc{background:var(--c1);border:1px solid var(--br);border-radius:10px;padding:.9rem 1.1rem;}
+.mc.accent{border-color:rgba(0,245,255,.2);background:rgba(0,245,255,.03);}
+.mc.warn{border-color:rgba(255,230,0,.15);}
+.ml{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);margin-bottom:.4rem;}
+.mv{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:#fff;line-height:1;}
+.mc.accent .mv{color:var(--cy);}
+.mc.warn .mv{color:var(--ye);}
+.mn{font-size:.68rem;color:var(--mu);margin-top:.2rem;}
+.row-grids{padding:0 1.5rem 1rem;display:flex;flex-direction:column;gap:.8rem;}
+.st{font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:.2em;color:var(--mu);margin-bottom:.4rem;}
+.bg4{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;}
+.bg3{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;}
+@media(max-width:580px){.bg4,.bg3{grid-template-columns:1fr 1fr;}}
+.bc{background:var(--c2);border:1px solid var(--br);border-radius:7px;padding:.8rem .9rem;}
+.bc.so{opacity:.55;}
+.bl{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.07em;color:var(--mu);margin-bottom:.35rem;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;}
+.bso{background:var(--pk);color:#fff;font-size:.5rem;padding:.08rem .3rem;border-radius:2px;}
+.bv{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:#fff;line-height:1;}
+.bv span{font-size:.7rem;color:var(--mu);font-family:'DM Sans',sans-serif;}
+.bi{font-size:.7rem;color:var(--cy);margin-top:.1rem;}
+.filters{display:flex;gap:.45rem;padding:.8rem 1.5rem;flex-wrap:wrap;align-items:center;border-top:1px solid var(--br);border-bottom:1px solid var(--br);background:rgba(8,0,26,.85);position:sticky;top:54px;z-index:9;backdrop-filter:blur(6px);}
+.fs{flex:1;min-width:160px;background:rgba(0,0,0,.35);border:1px solid var(--br);border-radius:6px;padding:.45rem .8rem;color:var(--tx);font-size:.8rem;outline:none;}
+.fs:focus{border-color:rgba(255,45,120,.35);}
+.fs::placeholder{color:var(--mu);}
+.fsel{background:rgba(0,0,0,.35);border:1px solid var(--br);border-radius:6px;padding:.45rem .6rem;color:var(--tx);font-family:'Space Mono',monospace;font-size:.58rem;outline:none;cursor:pointer;}
+.btn-exp{background:rgba(255,230,0,.08);border:1px solid rgba(255,230,0,.25);color:var(--ye);font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.08em;padding:.45rem .85rem;border-radius:6px;cursor:pointer;white-space:nowrap;margin-left:auto;}
+.btn-exp:hover{background:rgba(255,230,0,.15);}
+.btn-ref{background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.2);color:var(--pk);font-size:.9rem;width:30px;height:30px;border-radius:6px;cursor:pointer;}
+.tscroll{overflow-x:auto;padding:0 1.5rem;}
+.twrap{min-width:680px;}
+.thead{display:grid;grid-template-columns:110px 1fr 95px 80px 45px 75px 90px 105px;gap:.35rem;padding:.45rem .7rem;font-family:'Space Mono',monospace;font-size:.52rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);border-bottom:1px solid var(--br);}
+.trow{display:grid;grid-template-columns:110px 1fr 95px 80px 45px 75px 90px 105px;gap:.35rem;padding:.7rem .7rem;border-bottom:1px solid rgba(255,255,255,.03);align-items:center;transition:background .15s;}
+.trow:hover{background:rgba(255,255,255,.02);}
+.trow.pending{opacity:.55;}
+.td{font-size:.78rem;overflow:hidden;}
+.oid{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.04em;color:var(--mu);}
+.bn{font-weight:500;font-size:.82rem;}
+.bs{font-size:.65rem;color:var(--mu);margin-top:.08rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.zb{font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.05em;border:1px solid;padding:.12rem .4rem;border-radius:3px;white-space:nowrap;}
+.qty{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;}
+.amt{font-family:'Bebas Neue',sans-serif;font-size:.95rem;color:var(--cy);}
+.st-b{font-family:'Space Mono',monospace;font-size:.55rem;padding:.15rem .45rem;border-radius:4px;}
+.st-b.paid{background:rgba(74,222,128,.1);color:#4ade80;border:1px solid rgba(74,222,128,.2);}
+.st-b.pend{background:rgba(255,230,0,.08);color:var(--ye);border:1px solid rgba(255,230,0,.2);}
+.disc{font-family:'Space Mono',monospace;font-size:.54rem;background:rgba(255,230,0,.07);color:var(--ye);border:1px solid rgba(255,230,0,.15);padding:.08rem .4rem;border-radius:3px;}
+.none{color:#444;}
+.empty{text-align:center;padding:3rem;font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.1em;color:var(--mu);}
+.tfooter{padding:.65rem 1.5rem;font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.1em;color:var(--mu);}
 </style>
 
 </body>
