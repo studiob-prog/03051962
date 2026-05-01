@@ -12,123 +12,50 @@ import { getFirestore, collection, getDocs, doc, getDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-apiKey:            “AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU”,
-authDomain:        “tributo-kpop-demon-hunters.firebaseapp.com”,
-projectId:         “tributo-kpop-demon-hunters”,
-storageBucket:     “tributo-kpop-demon-hunters.firebasestorage.app”,
+apiKey: “AIzaSyAbLNTVJ1pAxpPg2x7y3kGNFh0dzjDe2sU”,
+authDomain: “tributo-kpop-demon-hunters.firebaseapp.com”,
+projectId: “tributo-kpop-demon-hunters”,
+storageBucket: “tributo-kpop-demon-hunters.firebasestorage.app”,
 messagingSenderId: “964475171923”,
-appId:             “1:964475171923:web:0ce2d4f3e720709f0002a6”,
+appId: “1:964475171923:web:0ce2d4f3e720709f0002a6”,
 };
 
 const SHOWS = {
-“apr30-17”:“30 Abr · 17:00”,
-“apr30-18”:“30 Abr · 18:45”,
-“may02-17”:“2 May · 17:00”,
-“may02-18”:“2 May · 18:45”,
+“apr30-17”: “30 Abr 17:00”,
+“apr30-18”: “30 Abr 18:45”,
+“may02-17”: “2 May 17:00”,
+“may02-18”: “2 May 18:45”,
 };
 const ZONES = {
-“vip” :{ label:“VIP”,        price:450, color:”#FFE600” },
-“pref”:{ label:“Preferente”, price:350, color:”#FF2D78” },
-“seg” :{ label:“2do Piso”,   price:250, color:”#00F5FF” },
+“vip”:  { label:“VIP”,        color:”#FFE600” },
+“pref”: { label:“Preferente”, color:”#FF2D78” },
+“seg”:  { label:“2do Piso”,   color:”#00F5FF” },
 };
 
 const fbApp = initializeApp(firebaseConfig);
 const db    = getFirestore(fbApp);
 
-let orders=[], inventory={}, filter={show:“all”,zone:“all”,status:“all”,search:””}, loading=true, errMsg=””;
-
-// ── CARGA ──
-// boletos.html usa: setDoc(doc(db, “kpop_show”, “orders”, orderId))
-// Firestore path de 4 segmentos: colección/doc/subcolección/doc
-// = colección “kpop_show” > doc “orders” > subcolección implícita NO
-// En realidad Firestore trata el path como: col > doc > col > doc
-// “kpop_show”(col) / “orders”(doc) / orderId(col???)
-// Con 3 args después de db en doc(): es col/doc/col — inválido, debe ser par
-// El SDK lo resuelve: si hay 4 segmentos totales en el path string = col/doc/subcol/doc ✓
-// Entonces: col=“kpop_show”, doc=“orders” es el documento PADRE, orderId es documento en subcolección
-// La subcolección no tiene nombre explícito — Firestore la infiere del path
-// Para leer: getDocs(collection(db, “kpop_show”, “orders”)) — esto sería subcolección “orders” de doc “kpop_show”
-// PERO “kpop_show” es una colección, no un doc.
-// CONCLUSIÓN FINAL: doc(db,“kpop_show”,“orders”,orderId) en JS SDK v9
-// equivale a path: “kpop_show/orders/orderId” — 3 segmentos = DOCUMENTO en subcolección
-// Firestore: “kpop_show” es colección raíz, “orders” es documento, y orderId es subcolección de “orders”
-// NO — con 3 segmentos es: col(kpop_show)/doc(orders)/col(orderId) — sería una colección
-// Con la llamada doc(db, “kpop_show”, “orders”, orderId) el SDK genera path: kpop_show/orders/orderId
-// Eso es 3 segmentos = colección si impar, documento si par. 3 = impar = COLECCIÓN. Error.
-// En realidad doc() acepta (db, …pathSegments) donde pathSegments se unen con /
-// doc(db,“kpop_show”,“orders”,orderId) → path=“kpop_show/orders/”+orderId = 3 segmentos separados por /
-// Un path de documento debe tener número PAR de segmentos.
-// 3 segmentos = impar = esto sería una colección, no un documento. El SDK lo rechazaría.
-// PERO el código funciona y guarda datos… entonces quizás el SDK concatena diferente.
-// Revisando documentación v9: doc(firestore, path) o doc(firestore, …pathSegments)
-// doc(db,“kpop_show”,“orders”,orderId) → [“kpop_show”,“orders”,orderId].join(”/”) = “kpop_show/orders/KP-XXX”
-// “kpop_show/orders/KP-XXX” = 3 segmentos separados por / → par de segmentos: kpop_show(col), orders(doc), KP-XXX(col)
-// Espera — contando: kpop_show=1, orders=2, KP-XXX=3. Segmentos impares = colección. SDK lanzaría error.
-// A menos que el SDK v9 acepte paths impares para doc() silenciosamente.
-// Lo más probable: las órdenes están en la SUBCOLECCIÓN “orders” del documento “kpop_show/inventory” NO
-// O bien: colección raíz “kpop_show”, documento con id=orderId, campo show/zone/etc.
-// Y “orders” es solo un string extra que se ignora o concatena al id.
-// ESTRATEGIA: intentar múltiples rutas y ver cuál devuelve datos.
+let orders = [], filter = { show:“all”, zone:“all”, status:“all”, search:”” }, loading = true, errMsg = “”;
 
 async function loadData() {
-loading=true; errMsg=””; render();
+loading = true; errMsg = “”; render();
 try {
-// Intento 1: subcolección “orders” dentro del documento “kpop_show”
-// Path: collection(db, “kpop_show”, “orders”) — esto sería col raíz kpop_show NO
-// collection(db, “kpop_show”, “orders”) con 2 args después de db = path “kpop_show/orders”
-// 2 segmentos = PAR = esto es un documento, no colección. SDK error.
-// collection() necesita path impar. collection(db,“kpop_show”) = col raíz ✓
-// collection(db,“kpop_show”,“orders”,“items”) = kpop_show(col)/orders(doc)/items(col) ✓
-
-```
-// El código original: setDoc(doc(db,"kpop_show","orders",orderId))
-// doc() necesita path par: kpop_show(col)/orders(doc) = 2 seg ✓ con solo 2 args
-// Con 3 args: kpop_show(col)/orders(doc)/orderId(col?) — impar, inválido para doc()
-// PERO si el SDK concatena los args como pathSegments y divide por /...
-// Quizás "kpop_show/orders" es el documento y orderId es la subcolección... todavía impar.
-
-// La ÚNICA interpretación válida con path par:
-// doc(db, "kpop_show", "orders/"+orderId) → path "kpop_show/orders/KP-XXX" — sigue siendo 3 segs
-// O: el documento está en: colección "kpop_show", id="orders/KP-XXX" (con slash en el id) — inválido en Firestore
-
-// CONCLUSIÓN PRAGMÁTICA: asumir que las órdenes están en colección "kpop_show" 
-// con documentos cuyo id empieza con "KP-" (el código puede haber simplificado el path)
-// O bien están en subcolección: collection path = "kpop_show/orders" si se accede como subcol de doc "orders"
-
-// Intentar la subcolección correcta: si "orders" es un documento en "kpop_show",
-// los KP-XXX serían subcolección de ese documento
-// Para leer esa subcolección: collection(db, "kpop_show", "orders", <subcol_name>)
-// Pero no sabemos el nombre de la subcol... 
-
-// PLAN FINAL: leer colección raíz "kpop_show" y filtrar docs que no sean "inventory"
-const col1 = await getDocs(collection(db, "kpop_show"));
-const posibles = col1.docs.filter(d => d.id !== "inventory");
-
-if (posibles.length > 0 && posibles[0].data().show) {
-  // Las órdenes están directamente en kpop_show como documentos
-  orders = posibles.map(d => ({ id: d.id, ...d.data() }));
+// Las ordenes se guardan con: setDoc(doc(db,“kpop_show”,“orders”,orderId))
+// Eso crea documentos en la subcoleccion “orders” dentro de la coleccion “kpop_show”
+const snap = await getDocs(collection(db, “kpop_show”, “orders”));
+if (snap.docs.length > 0) {
+orders = snap.docs.map(d => ({ id: d.id, …d.data() }));
 } else {
-  // Intentar subcolección "orders" del documento "orders" en kpop_show
-  // Esto requiere conocer el path exacto
-  // Asumimos que "orders" es un doc en kpop_show y los KP-XXX son su subcolección
-  // No hay API directa para esto sin collectionGroup — usar collectionGroup
-  // Sin imports adicionales, intentamos path directo
-  const col2 = await getDocs(collection(db, "kpop_show", "orders", "items"));
-  if (col2.docs.length > 0) {
-    orders = col2.docs.map(d => ({ id: d.id, ...d.data() }));
-  }
+// Fallback: buscar directamente en la coleccion raiz kpop_show
+const snap2 = await getDocs(collection(db, “kpop_show”));
+orders = snap2.docs
+.filter(d => d.id !== “inventory” && d.data().show)
+.map(d => ({ id: d.id, …d.data() }));
 }
-
-// Inventario
-const invSnap = await getDoc(doc(db, "kpop_show", "inventory"));
-if (invSnap.exists()) inventory = invSnap.data();
-```
-
 } catch(e) {
-console.error(e);
 errMsg = e.message;
 }
-loading=false; render();
+loading = false; render();
 }
 
 function filtered() {
@@ -137,139 +64,160 @@ if (filter.show   !== “all” && o.show   !== filter.show)   return false;
 if (filter.zone   !== “all” && o.zone   !== filter.zone)   return false;
 if (filter.status !== “all” && o.status !== filter.status) return false;
 if (filter.search) {
-const q=filter.search.toLowerCase();
-if (!(o.buyer?.name||””).toLowerCase().includes(q) &&
-!(o.buyer?.email||””).toLowerCase().includes(q) &&
-!(o.id||””).toLowerCase().includes(q)) return false;
+const q = filter.search.toLowerCase();
+if (!(o.buyer?.name  || “”).toLowerCase().includes(q) &&
+!(o.buyer?.email || “”).toLowerCase().includes(q) &&
+!(o.id || “”).toLowerCase().includes(q)) return false;
 }
 return true;
 });
 }
 
 function metrics() {
-const paid=orders.filter(o=>o.status===“paid”||o.status===“approved”);
-const pending=orders.filter(o=>o.status===“pending”);
-const byShow={}, byZone={};
-Object.keys(SHOWS).forEach(k=>{byShow[k]={b:0,i:0};});
-Object.keys(ZONES).forEach(k=>{byZone[k]={b:0,i:0};});
-paid.forEach(o=>{
-if(byShow[o.show]){byShow[o.show].b+=(o.qty||0);byShow[o.show].i+=(o.total||0);}
-if(byZone[o.zone]){byZone[o.zone].b+=(o.qty||0);byZone[o.zone].i+=(o.total||0);}
+const paid    = orders.filter(o => o.status === “paid” || o.status === “approved”);
+const pending = orders.filter(o => o.status === “pending”);
+const byShow  = {}, byZone = {};
+Object.keys(SHOWS).forEach(k => { byShow[k] = { b:0, i:0 }; });
+Object.keys(ZONES).forEach(k => { byZone[k] = { b:0, i:0 }; });
+paid.forEach(o => {
+if (byShow[o.show]) { byShow[o.show].b += (o.qty||0); byShow[o.show].i += (o.total||0); }
+if (byZone[o.zone]) { byZone[o.zone].b += (o.qty||0); byZone[o.zone].i += (o.total||0); }
 });
 return {
-paid:paid.length, pending:pending.length, total:orders.length,
-ingresos:paid.reduce((s,o)=>s+(o.total||0),0),
-boletos:paid.reduce((s,o)=>s+(o.qty||0),0),
+paid: paid.length, pending: pending.length, total: orders.length,
+ingresos: paid.reduce((s,o) => s + (o.total||0), 0),
+boletos:  paid.reduce((s,o) => s + (o.qty||0),   0),
 byShow, byZone
 };
 }
 
 function exportCSV() {
-const rows=filtered();
-const h=[“ID”,“Nombre”,“Email”,“Teléfono”,“Función”,“Zona”,“Boletos”,“Total”,“Estado”,“Descuento”,“Código”];
-const lines=rows.map(o=>{
-const b=o.buyer||{};
-return [o.id,b.name||””,b.email||””,b.phone||””,
-SHOWS[o.show]||o.show||””,ZONES[o.zone]?.label||o.zone||””,
-o.qty||1,o.total||0,o.status||””,
-o.discount?`${o.discount.pct}%`:””,o.discount?.code||””,
-].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(”,”);
+const rows = filtered();
+const h = [“ID”,“Nombre”,“Email”,“Telefono”,“Funcion”,“Zona”,“Boletos”,“Total”,“Estado”,“Descuento”,“Codigo”];
+const lines = rows.map(o => {
+const b = o.buyer || {};
+return [
+o.id, b.name||””, b.email||””, b.phone||””,
+SHOWS[o.show]||o.show||””, ZONES[o.zone]?.label||o.zone||””,
+o.qty||1, o.total||0, o.status||””,
+o.discount ? o.discount.pct+”%” : “”,
+o.discount?.code || “”,
+].map(v => ‘”’ + String(v).replace(/”/g, ‘””’) + ‘”’).join(”,”);
 });
-const csv=[h.join(”,”),…lines].join(”\n”);
-const blob=new Blob([”\uFEFF”+csv],{type:“text/csv;charset=utf-8;”});
-const url=URL.createObjectURL(blob);
-const a=document.createElement(“a”);
-a.href=url;a.download=`kpop-ordenes-${Date.now()}.csv`;a.click();URL.revokeObjectURL(url);
+const csv  = [h.join(”,”)].concat(lines).join(”\n”);
+const blob = new Blob([”\uFEFF” + csv], { type:“text/csv;charset=utf-8;” });
+const url  = URL.createObjectURL(blob);
+const a    = document.createElement(“a”);
+a.href = url; a.download = “kpop-ordenes.csv”; a.click();
+URL.revokeObjectURL(url);
 }
 
 function render() {
-document.getElementById(“root”).innerHTML = loading ? `<div class="loading"><div class="spinner"></div><div class="loading-txt">CONECTANDO CON FIREBASE...</div></div>` : renderDash();
+document.getElementById(“root”).innerHTML = loading ? renderLoading() : renderDash();
 if (!loading) bindEvents();
 }
 
+function renderLoading() {
+return ‘<div class="loading"><div class="spinner"></div><div class="ltxt">CONECTANDO CON FIREBASE…</div></div>’;
+}
+
 function renderDash() {
-const m=metrics(), rows=filtered();
-return ` ${errMsg?`<div class="err-box">⚠️ Error Firebase: ${errMsg}</div>`:””}
+const m = metrics(), rows = filtered();
+var html = “”;
 
-  <div class="metrics-grid">
-    <div class="mc accent"><div class="ml">Ingresos confirmados</div><div class="mv">$${m.ingresos.toLocaleString()}</div><div class="mn">MXN · pagadas</div></div>
-    <div class="mc"><div class="ml">Boletos vendidos</div><div class="mv">${m.boletos}</div><div class="mn">${m.paid} órdenes</div></div>
-    <div class="mc warn"><div class="ml">Pendientes</div><div class="mv">${m.pending}</div><div class="mn">sin completar pago</div></div>
-    <div class="mc"><div class="ml">Total órdenes</div><div class="mv">${m.total}</div><div class="mn">todas las funciones</div></div>
-  </div>
-
-  <div class="row-grids">
-    <div>
-      <div class="st">Por función</div>
-      <div class="bg4">
-        ${Object.entries(SHOWS).map(([id,lb])=>{
-          const d=m.byShow[id]||{b:0,i:0},so=id.startsWith("apr30");
-          return`<div class="bc ${so?"so":""}"><div class="bl">${lb}${so?' <span class="bso">SOLD OUT</span>':""}</div><div class="bv">${d.b}<span> bol.</span></div><div class="bi">$${d.i.toLocaleString()}</div></div>`;
-        }).join("")}
-      </div>
-    </div>
-    <div>
-      <div class="st">Por zona</div>
-      <div class="bg3">
-        ${Object.entries(ZONES).map(([id,z])=>{
-          const d=m.byZone[id]||{b:0,i:0};
-          return`<div class="bc" style="border-color:${z.color}33"><div class="bl" style="color:${z.color}">${z.label}</div><div class="bv">${d.b}<span> bol.</span></div><div class="bi">$${d.i.toLocaleString()}</div></div>`;
-        }).join("")}
-      </div>
-    </div>
-  </div>
-
-  <div class="filters">
-    <input class="fs" id="f-search" placeholder="🔍 Nombre, email o ID..." value="${filter.search}">
-    <select class="fsel" id="f-show">
-      <option value="all">Todas las funciones</option>
-      ${Object.entries(SHOWS).map(([id,l])=>`<option value="${id}"${filter.show===id?" selected":""}>${l}</option>`).join("")}
-    </select>
-    <select class="fsel" id="f-zone">
-      <option value="all">Todas las zonas</option>
-      ${Object.entries(ZONES).map(([id,z])=>`<option value="${id}"${filter.zone===id?" selected":""}>${z.label}</option>`).join("")}
-    </select>
-    <select class="fsel" id="f-status">
-      <option value="all">Todos</option>
-      <option value="paid"${filter.status==="paid"?" selected":""}>✓ Pagado</option>
-      <option value="pending"${filter.status==="pending"?" selected":""}>⏳ Pendiente</option>
-    </select>
-    <button class="btn-exp" onclick="window._export()">⬇ CSV</button>
-    <button class="btn-ref" onclick="window._reload()">↺</button>
-  </div>
-
-  <div class="tscroll">
-    <div class="twrap">
-      <div class="thead"><div>ID</div><div>Comprador</div><div>Función</div><div>Zona</div><div>Bol.</div><div>Total</div><div>Estado</div><div>Descuento</div></div>
-      ${rows.length===0
-        ?`<div class="empty">${orders.length===0?"Sin órdenes registradas aún":"Sin resultados"}</div>`
-        :rows.map(o=>{
-          const b=o.buyer||{},z=ZONES[o.zone]||{},ok=o.status==="paid"||o.status==="approved";
-          return`<div class="trow${ok?"":" pending"}">
-            <div class="td"><span class="oid">${o.id}</span></div>
-            <div class="td"><div class="bn">${b.name||"—"}</div><div class="bs">${b.email||"—"}</div><div class="bs">${b.phone||"—"}</div></div>
-            <div class="td">${SHOWS[o.show]||o.show||"—"}</div>
-            <div class="td"><span class="zb" style="color:${z.color||"#fff"};border-color:${z.color||"#fff"}44">${z.label||o.zone||"—"}</span></div>
-            <div class="td qty">${o.qty||1}</div>
-            <div class="td amt">$${(o.total||0).toLocaleString()}</div>
-            <div class="td"><span class="st-b ${ok?"paid":"pend"}">${ok?"✓ Pagado":"⏳ Pendiente"}</span></div>
-            <div class="td">${o.discount?`<span class="disc">${o.discount.code} −${o.discount.pct}%</span>`:'<span class="none">—</span>'}</div>
-          </div>`;
-        }).join("")}
-    </div>
-  </div>
-  <div class="tfooter">${rows.length} de ${orders.length} órdenes · ${m.paid} pagadas · ${m.pending} pendientes</div>`;
+if (errMsg) {
+html += ’<div class="errbox">Error Firebase: ’ + errMsg + ‘</div>’;
 }
 
-function bindEvents(){
-document.getElementById(“f-search”) ?.addEventListener(“input”,  e=>{filter.search=e.target.value;render();});
-document.getElementById(“f-show”)   ?.addEventListener(“change”, e=>{filter.show=e.target.value;render();});
-document.getElementById(“f-zone”)   ?.addEventListener(“change”, e=>{filter.zone=e.target.value;render();});
-document.getElementById(“f-status”) ?.addEventListener(“change”, e=>{filter.status=e.target.value;render();});
+html += ‘<div class="mgrid">’;
+html += ‘<div class="mc accent"><div class="ml">Ingresos confirmados</div><div class="mv">$’ + m.ingresos.toLocaleString() + ‘</div><div class="mn">MXN pagados</div></div>’;
+html += ‘<div class="mc"><div class="ml">Boletos vendidos</div><div class="mv">’ + m.boletos + ‘</div><div class="mn">’ + m.paid + ’ ordenes</div></div>’;
+html += ‘<div class="mc warn"><div class="ml">Pendientes</div><div class="mv">’ + m.pending + ‘</div><div class="mn">sin pago</div></div>’;
+html += ‘<div class="mc"><div class="ml">Total ordenes</div><div class="mv">’ + m.total + ‘</div><div class="mn">todas las funciones</div></div>’;
+html += ‘</div>’;
+
+html += ‘<div class="sgrid">’;
+html += ‘<div><div class="st">Por funcion</div><div class="bg4">’;
+Object.keys(SHOWS).forEach(function(id) {
+var lb = SHOWS[id], d = m.byShow[id] || { b:0, i:0 }, so = id.indexOf(“apr30”) === 0;
+html += ‘<div class="bc' + (so ? ' so' : '') + '">’;
+html += ‘<div class="bl">’ + lb + (so ? ’ <span class="bso">SOLD OUT</span>’ : ‘’) + ‘</div>’;
+html += ‘<div class="bv">’ + d.b + ‘<span> bol.</span></div>’;
+html += ‘<div class="bi">$’ + d.i.toLocaleString() + ‘</div></div>’;
+});
+html += ‘</div></div>’;
+
+html += ‘<div><div class="st">Por zona</div><div class="bg3">’;
+Object.keys(ZONES).forEach(function(id) {
+var z = ZONES[id], d = m.byZone[id] || { b:0, i:0 };
+html += ‘<div class="bc" style="border-color:' + z.color + '33">’;
+html += ‘<div class="bl" style="color:' + z.color + '">’ + z.label + ‘</div>’;
+html += ‘<div class="bv">’ + d.b + ‘<span> bol.</span></div>’;
+html += ‘<div class="bi">$’ + d.i.toLocaleString() + ‘</div></div>’;
+});
+html += ‘</div></div></div>’;
+
+html += ‘<div class="filters">’;
+html += ‘<input class="fs" id="f-search" placeholder="Buscar nombre, email o ID..." value="' + filter.search + '">’;
+html += ‘<select class="fsel" id="f-show"><option value="all">Todas las funciones</option>’;
+Object.keys(SHOWS).forEach(function(id) {
+html += ‘<option value=”’ + id + ‘”’ + (filter.show === id ? ’ selected’ : ‘’) + ‘>’ + SHOWS[id] + ‘</option>’;
+});
+html += ‘</select>’;
+html += ‘<select class="fsel" id="f-zone"><option value="all">Todas las zonas</option>’;
+Object.keys(ZONES).forEach(function(id) {
+html += ‘<option value=”’ + id + ‘”’ + (filter.zone === id ? ’ selected’ : ‘’) + ‘>’ + ZONES[id].label + ‘</option>’;
+});
+html += ‘</select>’;
+html += ‘<select class="fsel" id="f-status"><option value="all">Todos</option>’;
+html += ‘<option value=“paid”’ + (filter.status === “paid” ? ’ selected’ : ‘’) + ‘>Pagado</option>’;
+html += ‘<option value=“pending”’ + (filter.status === “pending” ? ’ selected’ : ‘’) + ‘>Pendiente</option>’;
+html += ‘</select>’;
+html += ‘<button class="bexp" onclick="window._export()">CSV</button>’;
+html += ‘<button class="bref" onclick="window._reload()">Actualizar</button>’;
+html += ‘</div>’;
+
+html += ‘<div class="tscroll"><div class="twrap">’;
+html += ‘<div class="thead"><div>ID</div><div>Comprador</div><div>Funcion</div><div>Zona</div><div>Bol.</div><div>Total</div><div>Estado</div><div>Descuento</div></div>’;
+
+if (rows.length === 0) {
+html += ‘<div class="empty">’ + (orders.length === 0 ? “Sin ordenes registradas aun” : “Sin resultados”) + ‘</div>’;
+} else {
+rows.forEach(function(o) {
+var b  = o.buyer || {};
+var z  = ZONES[o.zone] || {};
+var ok = o.status === “paid” || o.status === “approved”;
+html += ‘<div class="trow' + (ok ? '' : ' pending') + '">’;
+html += ‘<div class="td"><span class="oid">’ + o.id + ‘</span></div>’;
+html += ‘<div class="td"><div class="bn">’ + (b.name||”—”) + ‘</div><div class="bs">’ + (b.email||”—”) + ‘</div><div class="bs">’ + (b.phone||”—”) + ‘</div></div>’;
+html += ‘<div class="td">’ + (SHOWS[o.show]||o.show||”—”) + ‘</div>’;
+html += ‘<div class="td"><span class=“zb” style=“color:’ + (z.color||”#fff”) + ‘;border-color:’ + (z.color||”#fff”) + ‘44”>’ + (z.label||o.zone||”—”) + ‘</span></div>’;
+html += ‘<div class="td qty">’ + (o.qty||1) + ‘</div>’;
+html += ‘<div class="td amt">$’ + (o.total||0).toLocaleString() + ‘</div>’;
+html += ‘<div class="td"><span class="stb ' + (ok ? 'paid' : 'pend') + '">’ + (ok ? ‘Pagado’ : ‘Pendiente’) + ‘</span></div>’;
+html += ‘<div class="td">’ + (o.discount ? ‘<span class="disc">’ + o.discount.code + ’ -’ + o.discount.pct + ‘%</span>’ : ‘<span class="none">-</span>’) + ‘</div>’;
+html += ‘</div>’;
+});
+}
+html += ‘</div></div>’;
+html += ‘<div class="tfooter">’ + rows.length + ’ de ’ + orders.length + ’ ordenes · ’ + m.paid + ’ pagadas · ’ + m.pending + ’ pendientes</div>’;
+return html;
 }
 
-window._reload=()=>{orders=[];inventory={};loadData();};
-window._export=exportCSV;
+function bindEvents() {
+var fs = document.getElementById(“f-search”);
+var fw = document.getElementById(“f-show”);
+var fz = document.getElementById(“f-zone”);
+var ft = document.getElementById(“f-status”);
+if (fs) fs.addEventListener(“input”,  function(e) { filter.search = e.target.value; render(); });
+if (fw) fw.addEventListener(“change”, function(e) { filter.show   = e.target.value; render(); });
+if (fz) fz.addEventListener(“change”, function(e) { filter.zone   = e.target.value; render(); });
+if (ft) ft.addEventListener(“change”, function(e) { filter.status = e.target.value; render(); });
+}
+
+window._reload = function() { orders = []; loadData(); };
+window._export = exportCSV;
+
 loadData();
 </script>
 
@@ -277,74 +225,70 @@ loadData();
 <body>
 <header class="header">
   <div class="brand">DEMON HUNTERS <span>ADMIN</span></div>
-  <div class="brand-sub">Studio B · Compras en tiempo real</div>
+  <div class="bsub">Studio B · Compras en tiempo real</div>
 </header>
 <div id="root"></div>
-
 <style>
 :root{--pk:#FF2D78;--cy:#00F5FF;--ye:#FFE600;--bg:#08001A;--c1:#0D0020;--c2:#110028;--mu:#7B6A9A;--tx:#F0E6FF;--br:rgba(255,255,255,.07);}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;min-height:100vh;padding-bottom:60px;}
-.header{padding:1rem 1.5rem;background:rgba(13,0,32,.97);border-bottom:1px solid rgba(255,45,120,.15);position:sticky;top:0;z-index:10;backdrop-filter:blur(8px);}
+.header{padding:1rem 1.5rem;background:rgba(13,0,32,.97);border-bottom:1px solid rgba(255,45,120,.15);position:sticky;top:0;z-index:10;}
 .brand{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.15em;color:var(--pk);}
 .brand span{color:var(--mu);margin-left:.5rem;}
-.brand-sub{font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.15em;color:var(--mu);margin-top:.1rem;}
+.bsub{font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.15em;color:var(--mu);margin-top:.1rem;}
 .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:1rem;}
-.loading-txt{font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.2em;color:var(--mu);}
+.ltxt{font-family:'Space Mono',monospace;font-size:.65rem;letter-spacing:.2em;color:var(--mu);}
 .spinner{width:28px;height:28px;border:2px solid rgba(255,45,120,.2);border-top-color:var(--pk);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.err-box{margin:1rem 1.5rem;padding:1rem 1.2rem;background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.3);border-radius:8px;font-family:'Space Mono',monospace;font-size:.68rem;color:var(--pk);}
-.metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;padding:1.2rem 1.5rem;}
-@media(max-width:600px){.metrics-grid{grid-template-columns:1fr 1fr;}}
+.errbox{margin:1rem 1.5rem;padding:1rem;background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.3);border-radius:8px;font-family:'Space Mono',monospace;font-size:.68rem;color:var(--pk);}
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;padding:1.2rem 1.5rem;}
+@media(max-width:600px){.mgrid{grid-template-columns:1fr 1fr;}}
 .mc{background:var(--c1);border:1px solid var(--br);border-radius:10px;padding:.9rem 1.1rem;}
-.mc.accent{border-color:rgba(0,245,255,.2);background:rgba(0,245,255,.03);}
+.mc.accent{border-color:rgba(0,245,255,.2);}
 .mc.warn{border-color:rgba(255,230,0,.15);}
 .ml{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);margin-bottom:.4rem;}
 .mv{font-family:'Bebas Neue',sans-serif;font-size:1.9rem;color:#fff;line-height:1;}
 .mc.accent .mv{color:var(--cy);}
 .mc.warn .mv{color:var(--ye);}
 .mn{font-size:.68rem;color:var(--mu);margin-top:.2rem;}
-.row-grids{padding:0 1.5rem 1rem;display:flex;flex-direction:column;gap:.8rem;}
+.sgrid{padding:0 1.5rem 1rem;display:flex;flex-direction:column;gap:.8rem;}
 .st{font-family:'Bebas Neue',sans-serif;font-size:.85rem;letter-spacing:.2em;color:var(--mu);margin-bottom:.4rem;}
 .bg4{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;}
 .bg3{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;}
 @media(max-width:580px){.bg4,.bg3{grid-template-columns:1fr 1fr;}}
 .bc{background:var(--c2);border:1px solid var(--br);border-radius:7px;padding:.8rem .9rem;}
-.bc.so{opacity:.55;}
-.bl{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.07em;color:var(--mu);margin-bottom:.35rem;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;}
+.bc.so{opacity:.5;}
+.bl{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.07em;color:var(--mu);margin-bottom:.35rem;}
 .bso{background:var(--pk);color:#fff;font-size:.5rem;padding:.08rem .3rem;border-radius:2px;}
 .bv{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:#fff;line-height:1;}
 .bv span{font-size:.7rem;color:var(--mu);font-family:'DM Sans',sans-serif;}
 .bi{font-size:.7rem;color:var(--cy);margin-top:.1rem;}
-.filters{display:flex;gap:.45rem;padding:.8rem 1.5rem;flex-wrap:wrap;align-items:center;border-top:1px solid var(--br);border-bottom:1px solid var(--br);background:rgba(8,0,26,.85);position:sticky;top:54px;z-index:9;backdrop-filter:blur(6px);}
+.filters{display:flex;gap:.45rem;padding:.8rem 1.5rem;flex-wrap:wrap;align-items:center;border-top:1px solid var(--br);border-bottom:1px solid var(--br);background:rgba(8,0,26,.85);position:sticky;top:54px;z-index:9;}
 .fs{flex:1;min-width:160px;background:rgba(0,0,0,.35);border:1px solid var(--br);border-radius:6px;padding:.45rem .8rem;color:var(--tx);font-size:.8rem;outline:none;}
-.fs:focus{border-color:rgba(255,45,120,.35);}
 .fs::placeholder{color:var(--mu);}
 .fsel{background:rgba(0,0,0,.35);border:1px solid var(--br);border-radius:6px;padding:.45rem .6rem;color:var(--tx);font-family:'Space Mono',monospace;font-size:.58rem;outline:none;cursor:pointer;}
-.btn-exp{background:rgba(255,230,0,.08);border:1px solid rgba(255,230,0,.25);color:var(--ye);font-family:'Space Mono',monospace;font-size:.6rem;letter-spacing:.08em;padding:.45rem .85rem;border-radius:6px;cursor:pointer;white-space:nowrap;margin-left:auto;}
-.btn-exp:hover{background:rgba(255,230,0,.15);}
-.btn-ref{background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.2);color:var(--pk);font-size:.9rem;width:30px;height:30px;border-radius:6px;cursor:pointer;}
+.bexp{background:rgba(255,230,0,.08);border:1px solid rgba(255,230,0,.25);color:var(--ye);font-family:'Space Mono',monospace;font-size:.6rem;padding:.45rem .85rem;border-radius:6px;cursor:pointer;white-space:nowrap;margin-left:auto;}
+.bref{background:rgba(255,45,120,.08);border:1px solid rgba(255,45,120,.2);color:var(--pk);font-family:'Space Mono',monospace;font-size:.6rem;padding:.45rem .7rem;border-radius:6px;cursor:pointer;}
 .tscroll{overflow-x:auto;padding:0 1.5rem;}
 .twrap{min-width:680px;}
-.thead{display:grid;grid-template-columns:110px 1fr 95px 80px 45px 75px 90px 105px;gap:.35rem;padding:.45rem .7rem;font-family:'Space Mono',monospace;font-size:.52rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);border-bottom:1px solid var(--br);}
-.trow{display:grid;grid-template-columns:110px 1fr 95px 80px 45px 75px 90px 105px;gap:.35rem;padding:.7rem .7rem;border-bottom:1px solid rgba(255,255,255,.03);align-items:center;transition:background .15s;}
+.thead{display:grid;grid-template-columns:110px 1fr 90px 80px 45px 75px 90px 100px;gap:.35rem;padding:.45rem .7rem;font-family:'Space Mono',monospace;font-size:.52rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);border-bottom:1px solid var(--br);}
+.trow{display:grid;grid-template-columns:110px 1fr 90px 80px 45px 75px 90px 100px;gap:.35rem;padding:.7rem .7rem;border-bottom:1px solid rgba(255,255,255,.03);align-items:center;}
 .trow:hover{background:rgba(255,255,255,.02);}
 .trow.pending{opacity:.55;}
 .td{font-size:.78rem;overflow:hidden;}
-.oid{font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.04em;color:var(--mu);}
+.oid{font-family:'Space Mono',monospace;font-size:.55rem;color:var(--mu);}
 .bn{font-weight:500;font-size:.82rem;}
 .bs{font-size:.65rem;color:var(--mu);margin-top:.08rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.zb{font-family:'Space Mono',monospace;font-size:.56rem;letter-spacing:.05em;border:1px solid;padding:.12rem .4rem;border-radius:3px;white-space:nowrap;}
+.zb{font-family:'Space Mono',monospace;font-size:.56rem;border:1px solid;padding:.12rem .4rem;border-radius:3px;white-space:nowrap;}
 .qty{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;}
 .amt{font-family:'Bebas Neue',sans-serif;font-size:.95rem;color:var(--cy);}
-.st-b{font-family:'Space Mono',monospace;font-size:.55rem;padding:.15rem .45rem;border-radius:4px;}
-.st-b.paid{background:rgba(74,222,128,.1);color:#4ade80;border:1px solid rgba(74,222,128,.2);}
-.st-b.pend{background:rgba(255,230,0,.08);color:var(--ye);border:1px solid rgba(255,230,0,.2);}
+.stb{font-family:'Space Mono',monospace;font-size:.55rem;padding:.15rem .45rem;border-radius:4px;}
+.stb.paid{background:rgba(74,222,128,.1);color:#4ade80;border:1px solid rgba(74,222,128,.2);}
+.stb.pend{background:rgba(255,230,0,.08);color:var(--ye);border:1px solid rgba(255,230,0,.2);}
 .disc{font-family:'Space Mono',monospace;font-size:.54rem;background:rgba(255,230,0,.07);color:var(--ye);border:1px solid rgba(255,230,0,.15);padding:.08rem .4rem;border-radius:3px;}
 .none{color:#444;}
-.empty{text-align:center;padding:3rem;font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.1em;color:var(--mu);}
-.tfooter{padding:.65rem 1.5rem;font-family:'Space Mono',monospace;font-size:.55rem;letter-spacing:.1em;color:var(--mu);}
+.empty{text-align:center;padding:3rem;font-family:'Space Mono',monospace;font-size:.68rem;color:var(--mu);}
+.tfooter{padding:.65rem 1.5rem;font-family:'Space Mono',monospace;font-size:.55rem;color:var(--mu);}
 </style>
-
 </body>
 </html>
